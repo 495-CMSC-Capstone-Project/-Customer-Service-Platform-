@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.database import Base
-from app.models import Conversation, ConversationStatus
+from backend.app.database import Base
+from backend.app.models import Conversation, ConversationStatus
 
 
 def test_conversation_can_be_created():
