@@ -1,16 +1,27 @@
 import pytest
 
+from backend.app.ai_provider import AIProviderError
 from backend.app.ai_service import process_message
 
 
-def test_process_message_returns_general_response():
+def test_process_message_returns_general_response(monkeypatch):
+    def fake_generate_ai_response(message):
+        return "You can update your account information from the profile page."
+
+    monkeypatch.setattr(
+        "backend.app.ai_service.generate_ai_response",
+        fake_generate_ai_response,
+    )
+
     result = process_message(
         customer_id="cust_001",
         conversation_id="conv_001",
         message="How can I update my account information?",
     )
 
-    assert result.response_text
+    assert result.response_text == (
+        "You can update your account information from the profile page."
+    )
     assert result.confidence_score == 0.80
     assert result.escalation_required is False
     assert result.category == "general"
@@ -27,6 +38,27 @@ def test_process_message_detects_escalation_request():
     assert result.confidence_score == 0.95
     assert result.escalation_required is True
     assert result.category == "escalation"
+
+
+def test_process_message_handles_ai_provider_failure(monkeypatch):
+    def fake_generate_ai_response(message):
+        raise AIProviderError("Provider unavailable")
+
+    monkeypatch.setattr(
+        "backend.app.ai_service.generate_ai_response",
+        fake_generate_ai_response,
+    )
+
+    result = process_message(
+        customer_id="cust_001",
+        conversation_id="conv_001",
+        message="Can you help me with my account?",
+    )
+
+    assert result.response_text
+    assert result.confidence_score == 0.0
+    assert result.escalation_required is True
+    assert result.category == "ai_failure"
 
 
 @pytest.mark.parametrize(
