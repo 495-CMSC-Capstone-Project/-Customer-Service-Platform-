@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from backend.app.ai_provider import AIProviderError, generate_ai_response
+
 
 @dataclass
 class AIResponse:
@@ -16,10 +18,6 @@ def process_message(
 ) -> AIResponse:
     """
     Process a customer message and return a structured AI response.
-
-    This is the initial Alpha implementation of the AI orchestration layer.
-    A real LLM provider can be connected later without changing the
-    response contract used by the rest of the application.
     """
 
     if not customer_id.strip():
@@ -46,23 +44,32 @@ def process_message(
     )
 
     if escalation_required:
-        response_text = (
-            "I understand that you would like additional assistance. "
-            "I can escalate this conversation to a human agent."
+        return AIResponse(
+            response_text=(
+                "I understand that you would like additional assistance. "
+                "I can escalate this conversation to a human agent."
+            ),
+            confidence_score=0.95,
+            escalation_required=True,
+            category="escalation",
         )
-        confidence_score = 0.95
-        category = "escalation"
-    else:
-        response_text = (
-            "Thank you for your message. "
-            "The AI assistant is processing your customer service request."
+
+    try:
+        response_text = generate_ai_response(message)
+    except AIProviderError:
+        return AIResponse(
+            response_text=(
+                "The AI assistant is temporarily unavailable. "
+                "Please try again or request help from a human agent."
+            ),
+            confidence_score=0.0,
+            escalation_required=True,
+            category="ai_failure",
         )
-        confidence_score = 0.80
-        category = "general"
 
     return AIResponse(
         response_text=response_text,
-        confidence_score=confidence_score,
-        escalation_required=escalation_required,
-        category=category,
+        confidence_score=0.80,
+        escalation_required=False,
+        category="general",
     )
