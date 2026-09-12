@@ -54,6 +54,10 @@ function App() {
       );
 
       if (!apiResponse.ok) {
+        if (apiResponse.status === 400) {
+          throw new Error("The message could not be processed.");
+        }
+
         if (apiResponse.status === 403) {
           throw new Error(
             "You do not have access to this conversation."
@@ -64,11 +68,19 @@ function App() {
           throw new Error("Conversation not found.");
         }
 
-        if (apiResponse.status === 400) {
-          throw new Error("The message could not be processed.");
+        if (apiResponse.status === 429) {
+          throw new Error(
+            "Too many requests. Please wait a moment and try again."
+          );
         }
 
-        throw new Error("The service is temporarily unavailable.");
+        if (apiResponse.status === 503) {
+          throw new Error(
+            "The service is temporarily unavailable. Please try again later."
+          );
+        }
+
+        throw new Error("An unexpected service error occurred.");
       }
 
       const data: ChatResponse = await apiResponse.json();
