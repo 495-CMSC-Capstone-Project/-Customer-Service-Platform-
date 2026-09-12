@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,10 +17,12 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    responseText: str
-    confidenceScore: float
-    escalationRequired: bool
-    category: str
+    conversationId: str
+    messageId: str
+    response: str
+    source: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    escalated: bool
 
 
 @app.exception_handler(RequestValidationError)
@@ -38,7 +42,8 @@ def chat(
     conversationId: str = Path(min_length=1),
 ) -> ChatResponse:
     """
-    Process a customer message through the AI orchestration service.
+    Process a customer message through the AI orchestration service
+    and return the public API response defined by the interface contract.
     """
 
     try:
@@ -54,8 +59,10 @@ def chat(
         ) from exc
 
     return ChatResponse(
-        responseText=result.response_text,
-        confidenceScore=result.confidence_score,
-        escalationRequired=result.escalation_required,
-        category=result.category,
+        conversationId=conversationId,
+        messageId=f"msg_{uuid4().hex}",
+        response=result.response_text,
+        source="AI",
+        confidence=result.confidence_score,
+        escalated=result.escalation_required,
     )
