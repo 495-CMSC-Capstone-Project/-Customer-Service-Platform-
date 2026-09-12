@@ -30,12 +30,15 @@ def test_chat_endpoint_returns_ai_response(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "responseText": "Here is your response.",
-        "confidenceScore": 0.80,
-        "escalationRequired": False,
-        "category": "general",
-    }
+
+    data = response.json()
+
+    assert data["conversationId"] == "conv_001"
+    assert data["messageId"].startswith("msg_")
+    assert data["response"] == "Here is your response."
+    assert data["source"] == "AI"
+    assert data["confidence"] == 0.80
+    assert data["escalated"] is False
 
 
 def test_chat_endpoint_returns_escalation_response(monkeypatch):
@@ -61,8 +64,17 @@ def test_chat_endpoint_returns_escalation_response(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["escalationRequired"] is True
-    assert response.json()["category"] == "escalation"
+
+    data = response.json()
+
+    assert data["conversationId"] == "conv_001"
+    assert data["messageId"].startswith("msg_")
+    assert data["response"] == (
+        "I can escalate this conversation to a human agent."
+    )
+    assert data["source"] == "AI"
+    assert data["confidence"] == 0.95
+    assert data["escalated"] is True
 
 
 def test_chat_endpoint_returns_bad_request_for_empty_message():
