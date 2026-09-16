@@ -60,6 +60,8 @@ export async function sendCustomerMessage(
 
 function messageForStatus(status: number): string {
   switch (status) {
+    case 401:
+      return "Your session has expired. Please sign in again.";
     case 400:
       return "The message could not be processed.";
     case 403:
