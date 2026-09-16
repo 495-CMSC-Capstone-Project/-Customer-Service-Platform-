@@ -32,12 +32,13 @@ export function ConversationsPage() {
           <p className="eyebrow">Your support</p>
           <h1>Conversations</h1>
           <p className="page__lede">
-            Open a past conversation or start a new one. Escalated issues stay
-            visible until a human agent takes over.
+            Open a past conversation or continue the live AI chat. New messages
+            go through FastAPI and the AI orchestration service. Sign in as
+            cust_001 and use conv_001 for the working backend demo.
           </p>
         </div>
         <button type="button" className="button button--primary" onClick={handleStart}>
-          Start a conversation
+          Open live AI chat
         </button>
       </div>
       <ErrorMessage message={error} />

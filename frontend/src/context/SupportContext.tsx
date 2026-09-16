@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createSeed } from "../data/seed";
+import { sendCustomerMessage } from "../api/conversations";
+import { createSeed, LIVE_CONVERSATION_ID } from "../data/seed";
 import {
   ConversationStatus,
   SenderType,
@@ -22,14 +23,10 @@ import {
   type Ticket,
 } from "../types/support";
 import { createId } from "../utils/ids";
-import {
-  assignQueue,
-  generatePrototypeReply,
-  summarizeMessage,
-} from "../utils/prototypeAi";
+import { assignQueue, summarizeMessage } from "../utils/prototypeAi";
 import { useAuth } from "./AuthContext";
 
-const STORE_KEY = "csp-prototype-store";
+const STORE_KEY = "csp-support-store-v2";
 
 interface SupportContextValue {
   store: PrototypeStore;
@@ -77,12 +74,6 @@ function loadStore(): PrototypeStore {
   } catch {
     return createSeed();
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 export function SupportProvider({ children }: { children: ReactNode }) {
@@ -162,33 +153,19 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     if (!customerId) {
       throw new Error("You need to sign in first.");
     }
-    const now = new Date().toISOString();
-    const conversationId = createId("conv");
-    setStore((current) => ({
-      ...current,
-      conversations: [
-        {
-          conversationId,
-          customerId,
-          status: ConversationStatus.ACTIVE,
-          createdAt: now,
-          updatedAt: now,
-        },
-        ...current.conversations,
-      ],
-      messages: [
-        ...current.messages,
-        {
-          messageId: createId("msg"),
-          conversationId,
-          senderType: SenderType.SYSTEM,
-          messageText:
-            "You can describe your issue below. Replies show whether they came from the AI assistant or a human agent.",
-          createdAt: now,
-        },
-      ],
-    }));
-    return conversationId;
+
+    const liveConversation = storeRef.current.conversations.find(
+      (item) =>
+        item.conversationId === LIVE_CONVERSATION_ID &&
+        item.customerId === customerId,
+    );
+    if (liveConversation) {
+      return liveConversation.conversationId;
+    }
+
+    throw new Error(
+      "Live AI support uses customer ID cust_001 and conversation conv_001. Sign in with cust_001 to send messages through the backend.",
+    );
   }, [customerId]);
 
   const sendMessage = useCallback(
@@ -218,12 +195,13 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date().toISOString();
+      const customerMessageId = createId("msg");
       setStore((current) => ({
         ...current,
         messages: [
           ...current.messages,
           {
-            messageId: createId("msg"),
+            messageId: customerMessageId,
             conversationId,
             senderType: SenderType.CUSTOMER,
             messageText: trimmed,
@@ -239,26 +217,27 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       setSendingConversationId(conversationId);
 
       try {
-        await delay(900);
-        const result = generatePrototypeReply(trimmed);
+        const result = await sendCustomerMessage(conversationId, {
+          customerId,
+          message: trimmed,
+        });
         const replyAt = new Date().toISOString();
-        const aiMessageId = createId("msg");
 
         setStore((current) => {
           const messages = [
             ...current.messages,
             {
-              messageId: aiMessageId,
+              messageId: result.messageId,
               conversationId,
               senderType: SenderType.AI,
-              messageText: result.responseText,
-              source: "AI" as const,
+              messageText: result.response,
+              source: result.source,
               confidence: result.confidence,
               createdAt: replyAt,
             },
           ];
 
-          if (!result.escalationRequired) {
+          if (!result.escalated) {
             return {
               ...current,
               messages,
@@ -293,7 +272,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
           }
 
           const ticketId = createId("ticket");
-          const queue = assignQueue(trimmed, result.category);
+          const queue = assignQueue(trimmed, "escalation");
           return {
             ...current,
             messages: [
@@ -311,7 +290,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
               {
                 ticketId,
                 conversationId,
-                reason: result.reason ?? "CUSTOMER_REQUEST",
+                reason: "CUSTOMER_REQUEST",
                 summary: summarizeMessage(trimmed),
                 status: TicketStatus.OPEN,
                 assignedQueue: queue,
@@ -331,14 +310,15 @@ export function SupportProvider({ children }: { children: ReactNode }) {
           };
         });
 
-        return {
-          conversationId,
-          messageId: aiMessageId,
-          response: result.responseText,
-          source: "AI" as const,
-          confidence: result.confidence,
-          escalated: result.escalationRequired,
-        };
+        return result;
+      } catch (error) {
+        setStore((current) => ({
+          ...current,
+          messages: current.messages.filter(
+            (item) => item.messageId !== customerMessageId,
+          ),
+        }));
+        throw error;
       } finally {
         setSendingConversationId(null);
       }

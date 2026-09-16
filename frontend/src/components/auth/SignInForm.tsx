@@ -55,8 +55,8 @@ export function SignInForm({
         onChange={(event) => setCustomerId(event.target.value)}
       />
       <p className="field-hint">
-        Prototype sign-in. Try <code>{DEMO_CUSTOMER_ID}</code> to see seeded
-        conversations.
+        Try <code>{DEMO_CUSTOMER_ID}</code> to open the live AI conversation
+        (<code>conv_001</code>) through the backend.
       </p>
       <ErrorMessage message={error} />
       <button type="submit" className="button button--primary">

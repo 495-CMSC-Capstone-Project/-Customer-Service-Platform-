@@ -8,27 +8,30 @@ import {
   type PrototypeStore,
 } from "../types/support";
 
-export const DEMO_CUSTOMER_ID = "cust_7832";
+export const DEMO_CUSTOMER_ID = "cust_001";
+export const LIVE_CONVERSATION_ID = "conv_001";
 
 export function createSeed(): PrototypeStore {
   return {
     customers: [
       {
         customerId: DEMO_CUSTOMER_ID,
-        name: "Alex Rivera",
-        accountStatus: "ACTIVE",
-      },
-      {
-        customerId: "cust_001",
         name: "Jordan Lee",
         accountStatus: "ACTIVE",
       },
     ],
     conversations: [
       {
-        conversationId: "conv_12345",
+        conversationId: LIVE_CONVERSATION_ID,
         customerId: DEMO_CUSTOMER_ID,
         status: ConversationStatus.ACTIVE,
+        createdAt: "2026-09-14T16:00:00.000Z",
+        updatedAt: "2026-09-14T16:00:00.000Z",
+      },
+      {
+        conversationId: "conv_12345",
+        customerId: DEMO_CUSTOMER_ID,
+        status: ConversationStatus.RESOLVED,
         createdAt: "2026-09-14T15:10:00.000Z",
         updatedAt: "2026-09-14T15:12:00.000Z",
       },
@@ -52,13 +55,6 @@ export function createSeed(): PrototypeStore {
         status: ConversationStatus.CLOSED,
         createdAt: "2026-09-08T09:40:00.000Z",
         updatedAt: "2026-09-08T09:55:00.000Z",
-      },
-      {
-        conversationId: "conv_j_01",
-        customerId: "cust_001",
-        status: ConversationStatus.ACTIVE,
-        createdAt: "2026-09-14T16:00:00.000Z",
-        updatedAt: "2026-09-14T16:00:00.000Z",
       },
     ],
     messages: [
@@ -141,10 +137,10 @@ export function createSeed(): PrototypeStore {
       },
       {
         messageId: "msg_5001",
-        conversationId: "conv_j_01",
+        conversationId: LIVE_CONVERSATION_ID,
         senderType: SenderType.SYSTEM,
         messageText:
-          "You can describe your issue below. Replies show whether they came from the AI assistant or a human agent.",
+          "This conversation is connected to the backend AI. Replies come from FastAPI and the AI orchestration service.",
         createdAt: "2026-09-14T16:00:00.000Z",
       },
     ],
