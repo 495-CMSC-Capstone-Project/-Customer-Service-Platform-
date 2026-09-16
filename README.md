@@ -23,7 +23,7 @@ The current Alpha implementation includes:
 - PostgreSQL database integration
 - Error handling for invalid requests and unavailable services
 - Automated backend tests
-- Automated frontend linting and build validation
+- Automated frontend API tests, linting, and build validation
 - GitHub Actions CI workflows
 
 ## Technology Stack
@@ -53,7 +53,7 @@ The current Alpha implementation includes:
 
 - Pytest
 - GitHub Actions
-- Frontend lint and build checks
+- Frontend API tests, lint, and build checks
 - Backend automated tests
 
 ## Repository Structure
@@ -325,6 +325,12 @@ Run ESLint:
 npm run lint
 ```
 
+Run frontend unit tests:
+
+```bash
+npm test
+```
+
 Build the frontend:
 
 ```bash
@@ -371,6 +377,10 @@ The frontend provides user-facing handling for several API conditions, including
 
 Unexpected service errors are also handled through a general fallback message.
 
+Successful API responses are checked before they are added to the conversation,
+and requests time out after 20 seconds instead of leaving the interface in a
+permanent loading state.
+
 The interface disables message submission while a request is being processed to help prevent duplicate submissions.
 
 ## Testing
@@ -402,6 +412,7 @@ From the `frontend` directory, run:
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```
 
@@ -413,6 +424,7 @@ The current CI process includes:
 
 - Backend automated tests
 - Frontend ESLint checks
+- Frontend API unit tests
 - Frontend TypeScript/Vite build validation
 
 Pull requests should have successful CI checks before they are merged into `main`.
