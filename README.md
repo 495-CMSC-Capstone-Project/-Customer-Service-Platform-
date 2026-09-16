@@ -447,6 +447,7 @@ Draft pull requests may be used while a feature or integration effort is still u
 
 ## Security Notes
 
+- Prototype Authentication: The Alpha release uses a prototype customer sign-in mechanism that stores the customer ID in browser `localStorage`. This is intended for demonstration purposes only and is not a production authentication implementation.
 - API keys and database credentials should not be committed to source control.
 - Sensitive configuration should be supplied through environment variables.
 - Backend requests are validated before processing.
