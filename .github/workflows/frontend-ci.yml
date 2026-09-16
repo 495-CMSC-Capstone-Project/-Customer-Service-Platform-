@@ -20,8 +20,8 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-build:
-    name: Lint and Build Frontend
+  test-and-build:
+    name: Test and Build Frontend
     runs-on: ubuntu-latest
 
     defaults:
@@ -38,10 +38,13 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run linting
         run: npm run lint
+
+      - name: Run unit tests
+        run: npm test
 
       - name: Build production application
         run: npm run build

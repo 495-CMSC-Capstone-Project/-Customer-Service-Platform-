@@ -42,7 +42,7 @@ export function Composer({
   }
 
   return (
-    <form className="composer" onSubmit={handleSubmit}>
+    <form className="composer" onSubmit={handleSubmit} aria-busy={sending}>
       <label htmlFor="support-message" className="sr-only">
         Describe the issue
       </label>
@@ -68,7 +68,7 @@ export function Composer({
           className="button button--primary"
           disabled={!canSend}
         >
-          Send
+          {sending ? "Sending…" : "Send"}
         </button>
       </div>
       {sending ? <LoadingState /> : null}

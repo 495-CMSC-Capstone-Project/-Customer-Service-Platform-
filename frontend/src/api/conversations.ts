@@ -1,6 +1,9 @@
 import type { SendMessageResult } from "../types/support";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const REQUEST_TIMEOUT_MS = 20_000;
+const INVALID_RESPONSE_MESSAGE =
+  "The support API returned an invalid response. Please try again.";
 
 interface SendMessageRequest {
   customerId: string;
@@ -11,7 +14,7 @@ interface ChatApiResponse {
   conversationId: string;
   messageId: string;
   response: string;
-  source: string;
+  source: "AI" | "HUMAN";
   confidence: number;
   escalated: boolean;
 }
@@ -21,6 +24,8 @@ export async function sendCustomerMessage(
   payload: SendMessageRequest,
 ): Promise<SendMessageResult> {
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     response = await fetch(
@@ -30,23 +35,40 @@ export async function sendCustomerMessage(
         headers: {
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           customerId: payload.customerId,
           message: payload.message,
         }),
       },
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(
+        "The support API took too long to respond. Please try again.",
+      );
+    }
     throw new Error(
       "Unable to reach the support API. Confirm the backend is running on port 8000.",
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     throw new Error(messageForStatus(response.status));
   }
 
-  const data = (await response.json()) as ChatApiResponse;
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(INVALID_RESPONSE_MESSAGE);
+  }
+
+  if (!isChatApiResponse(data)) {
+    throw new Error(INVALID_RESPONSE_MESSAGE);
+  }
 
   return {
     conversationId: data.conversationId,
@@ -58,7 +80,7 @@ export async function sendCustomerMessage(
   };
 }
 
-function messageForStatus(status: number): string {
+export function messageForStatus(status: number): string {
   switch (status) {
     case 400:
       return "The message could not be processed.";
@@ -73,4 +95,25 @@ function messageForStatus(status: number): string {
     default:
       return "An unexpected service error occurred.";
   }
+}
+
+function isChatApiResponse(value: unknown): value is ChatApiResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const response = value as Record<string, unknown>;
+  return (
+    typeof response.conversationId === "string" &&
+    response.conversationId.length > 0 &&
+    typeof response.messageId === "string" &&
+    response.messageId.length > 0 &&
+    typeof response.response === "string" &&
+    (response.source === "AI" || response.source === "HUMAN") &&
+    typeof response.confidence === "number" &&
+    Number.isFinite(response.confidence) &&
+    response.confidence >= 0 &&
+    response.confidence <= 1 &&
+    typeof response.escalated === "boolean"
+  );
 }
