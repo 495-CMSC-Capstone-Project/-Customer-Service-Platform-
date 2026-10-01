@@ -33,7 +33,11 @@ same-origin `/api` reverse proxy; the development proxy is not part of `dist`.
    exactly-once guarantee.
 5. Unsent drafts are stored in sessionStorage per customer and conversation,
    so navigating away or refreshing the same tab can restore them. They are
-   cleared after a successful response, subject to browser storage availability.
+   cleared after a successful response, even if you leave and return while
+   waiting. Failed drafts and retry errors survive in-app navigation. A late
+   response does not clear a newer draft revision or another conversation's draft.
+   When storage is unavailable, drafts remain in memory for this tab; the warning
+   explains that reloading may lose changes or restore an older saved draft.
 6. If the reply recommends human review, the UI explains that this demo does
    not connect an agent or confirm a ticket. The customer can continue chatting.
    The displayed confidence is a demo score, not a measured accuracy probability.
@@ -73,17 +77,23 @@ npm run check:bundle-size
 
 Local verification on October 1, 2026:
 
-- 44 tests passed across seven files, including 15 App-level workflow tests.
-- 91.62% lines, 90.62% statements, 83.61% branches, 97.19% functions.
-- JavaScript gzip: 84,209 bytes (82.24 KiB), below the 100 KiB budget.
+- 53 tests passed across seven files, including 24 App-level workflow tests.
+- 92.41% lines, 91.42% statements, 83.91% branches, 97.29% functions.
+- JavaScript gzip: 84,613 bytes (82.63 KiB), below the 100 KiB budget.
 - CSS gzip: 3,195 bytes (3.12 KiB), below the 25 KiB budget.
 - TypeScript build and lint passed.
 
 The App tests render the real pages, router, and providers and mock only network
 responses. They cover retries, request locking, drafts, deep-link sign-in,
 feedback, profile creation, storage failures, filtering, and honest escalation
-display. They are not a real-browser accessibility audit or a live AI-provider
-end-to-end test.
+display. Draft regressions include navigation before/after success or failure,
+newer revisions, customer/conversation isolation, and unavailable browser storage.
+
+A separate real-browser regression verified four delayed-response cases:
+returning before and after success, and before and after failure followed by a
+manual retry. Each successful send added one customer message and cleared the
+matching draft. These browser checks used controlled API responses, not a live
+AI provider. They are not a full accessibility audit or a production deployment test.
 
 Coverage is scoped by `vitest.config.ts` to the API client, composer, filters,
 authentication state and dialog, support state, chat, feedback, conversation

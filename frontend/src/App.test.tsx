@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { SupportProvider } from "./context/SupportContext";
 import { createSeed } from "./data/seed";
+import { useSupport } from "./context/support";
+import type { ReactNode } from "react";
 
 const storeKey = "csp-support-store-v2";
 const draftKey = "csp-draft:cust_001:conv_001";
@@ -17,14 +19,23 @@ function reply(overrides = {}) {
   });
 }
 
-function openApp(route = "/conversations/conv_001", customer: string | null = "cust_001") {
+function openApp(route = "/conversations/conv_001", customer: string | null = "cust_001", controls?: ReactNode) {
   if (customer) localStorage.setItem("csp-prototype-customer-id", customer);
   const view = render(
     <MemoryRouter initialEntries={[route]}>
-      <AuthProvider><SupportProvider><App /></SupportProvider></AuthProvider>
+      <AuthProvider><SupportProvider><App />{controls}</SupportProvider></AuthProvider>
     </MemoryRouter>,
   );
   return { ...view, user: userEvent.setup() };
+}
+
+function DraftRevisionControl() {
+  const { getDraft, setDraftMessage } = useSupport();
+  return <button onClick={() => {
+    const original = getDraft("conv_001").message;
+    setDraftMessage("conv_001", "Replacement draft");
+    setDraftMessage("conv_001", original);
+  }}>Create a newer draft revision</button>;
 }
 
 beforeEach(() => {
@@ -95,6 +106,142 @@ describe("customer support workflows", () => {
     openApp("/conversations/conv_001", "another_customer");
     expect(screen.getByRole("heading", { name: "You do not have access" })).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Describe the issue" })).toBeNull();
+  });
+
+  it.each(["before", "after"])("clears the sent draft when returning %s a pending reply arrives", async (returnTime) => {
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { user } = openApp();
+    await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "  Help while navigating  ");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    if (returnTime === "before") {
+      await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+      const pendingField = screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement;
+      expect(pendingField.disabled).toBe(true);
+      fireEvent.submit(pendingField.closest("form")!);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+    await act(async () => { finish(reply()); });
+    if (returnTime === "after") {
+      await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    }
+    expect(await screen.findByText("Check your account settings.")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("");
+    expect(sessionStorage.getItem(draftKey)).toBeNull();
+    expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByRole("article", { name: "You message" })).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["before", "after"])("retains a pending draft when returning %s failure, then clears it only after a successful retry", async (returnTime) => {
+    let fail!: (error: Error) => void;
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(new Promise<Response>((_resolve, reject) => { fail = reject; }))
+      .mockResolvedValueOnce(reply());
+    vi.stubGlobal("fetch", fetchMock);
+    const { user } = openApp();
+    await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "Keep this failed draft");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    if (returnTime === "before") await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    await act(async () => { fail(new TypeError("offline")); });
+    if (returnTime === "after") await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Unable to reach");
+    const field = screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement;
+    expect(field.value).toBe("Keep this failed draft");
+    expect(sessionStorage.getItem(draftKey)).toBe("Keep this failed draft");
+    expect(screen.queryByRole("article", { name: "You message" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Retry send" }));
+    expect(await screen.findByText("Check your account settings.")).toBeTruthy();
+    expect(field.value).toBe("");
+    expect(sessionStorage.getItem(draftKey)).toBeNull();
+    expect(screen.getAllByRole("article", { name: "You message" })).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["success", "failure"])("does not overwrite a newer draft revision after a late %s", async (outcome) => {
+    let finish!: (response: Response) => void;
+    let fail!: (error: Error) => void;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((resolve, reject) => {
+      finish = resolve;
+      fail = reject;
+    })));
+    const { user } = openApp(undefined, undefined, <DraftRevisionControl />);
+    await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "Same text, newer revision");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    // Exercise the provider contract directly; the production textarea stays disabled during sending.
+    await user.click(screen.getByRole("button", { name: "Create a newer draft revision" }));
+    await act(async () => {
+      if (outcome === "success") finish(reply());
+      else fail(new TypeError("offline"));
+    });
+    await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("Same text, newer revision");
+    expect(sessionStorage.getItem(draftKey)).toBe("Same text, newer revision");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("clears only the submitted customer's conversation draft while another conversation is open", async () => {
+    const sampleKey = "csp-draft:cust_001:conv_old_01";
+    const otherCustomerKey = "csp-draft:another_customer:conv_001";
+    sessionStorage.setItem(sampleKey, "Another conversation's draft");
+    sessionStorage.setItem(otherCustomerKey, "Another customer's draft");
+    let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((resolve) => { finish = resolve; })));
+    const { user } = openApp();
+    await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "Only clear the live draft");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    await user.click(screen.getByRole("link", { name: /^Open conv_old_01/ }));
+    await act(async () => { finish(reply()); });
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("Another conversation's draft");
+    expect(sessionStorage.getItem(sampleKey)).toBe("Another conversation's draft");
+    expect(sessionStorage.getItem(otherCustomerKey)).toBe("Another customer's draft");
+    expect(sessionStorage.getItem(draftKey)).toBeNull();
+  });
+
+  it("keeps in-memory drafts across navigation and clears them on success when session storage is blocked", async () => {
+    const { user } = openApp();
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (this === sessionStorage) throw new DOMException("Storage denied", "SecurityError");
+      setItem.call(this, key, value);
+    });
+    const removeItem = Storage.prototype.removeItem;
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, key) {
+      if (this === sessionStorage) throw new DOMException("Storage denied", "SecurityError");
+      removeItem.call(this, key);
+    });
+    let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((resolve) => { finish = resolve; })));
+    await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "In-memory draft");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("In-memory draft");
+    expect(screen.getByText(/Draft changes are kept in this tab only/)).toBeTruthy();
+    await act(async () => { finish(reply()); });
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("");
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("");
+    expect(screen.getByText(/Reloading may lose changes or restore an older draft/)).toBeTruthy();
+  });
+
+  it("does not lose a restored draft if storage reads stop working before a failed send", async () => {
+    sessionStorage.setItem(draftKey, "Restored before storage was blocked");
+    const { user } = openApp();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new DOMException("Storage denied", "SecurityError"); });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Unable to reach");
+    await user.click(screen.getAllByRole("link", { name: "Conversations" })[0]);
+    await user.click(screen.getByRole("button", { name: "Open live AI chat" }));
+    expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).value).toBe("Restored before storage was blocked");
+    expect((screen.getByRole("button", { name: "Retry send" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows a human-review recommendation without inventing a ticket and allows the next AI message", async () => {
@@ -225,7 +372,7 @@ describe("customer support workflows", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Quota exceeded", "QuotaExceededError"); });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply()));
     await user.type(screen.getByRole("textbox", { name: "Describe the issue" }), "Help with settings");
-    expect(screen.getByText(/Your draft is kept on this page only/)).toBeTruthy();
+    expect(screen.getByText(/Draft changes are kept in this tab only/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("Check your account settings.")).toBeTruthy();
     expect(await screen.findByText(/Browser storage is unavailable/)).toBeTruthy();

@@ -8,20 +8,20 @@ afterEach(() => {
 });
 
 describe("Composer", () => {
-  it("trims and sends a valid message, then clears the field", async () => {
+  it("trims a valid message and reflects the parent's draft updates", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn().mockResolvedValue(undefined);
-    render(
-      <Composer disabled={false} sending={false} onSend={onSend} />,
+    const { rerender } = render(
+      <Composer disabled={false} sending={false} message="  I need help with my account.  " onMessageChange={vi.fn()} onSend={onSend} />,
     );
 
     const textbox = screen.getByRole("textbox", { name: "Describe the issue" });
-    await user.type(textbox, "  I need help with my account.  ");
     await user.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => {
       expect(onSend).toHaveBeenCalledWith("I need help with my account.");
     });
+    rerender(<Composer disabled={false} sending={false} message="" onMessageChange={vi.fn()} onSend={onSend} />);
     expect((textbox as HTMLTextAreaElement).value).toBe("");
   });
 
@@ -29,11 +29,10 @@ describe("Composer", () => {
     const user = userEvent.setup();
     const onSend = vi.fn().mockRejectedValue(new Error("Service unavailable."));
     render(
-      <Composer disabled={false} sending={false} onSend={onSend} />,
+      <Composer disabled={false} sending={false} message="Help" onMessageChange={vi.fn()} onSend={onSend} />,
     );
 
     const textbox = screen.getByRole("textbox", { name: "Describe the issue" });
-    await user.type(textbox, "Help");
     await user.click(screen.getByRole("button", { name: "Send" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
@@ -46,7 +45,7 @@ describe("Composer", () => {
   it("rejects a blank message submitted programmatically", () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
-      <Composer disabled={false} sending={false} onSend={onSend} />,
+      <Composer disabled={false} sending={false} message="" onMessageChange={vi.fn()} onSend={onSend} />,
     );
 
     fireEvent.submit(container.querySelector("form")!);
@@ -59,7 +58,7 @@ describe("Composer", () => {
 
   it("disables input and reports progress while sending", () => {
     render(
-      <Composer disabled={false} sending onSend={vi.fn()} />,
+      <Composer disabled={false} sending message="Help" onMessageChange={vi.fn()} onSend={vi.fn()} />,
     );
 
     const textbox = screen.getByRole("textbox", { name: "Describe the issue" });
@@ -75,6 +74,8 @@ describe("Composer", () => {
         disabled
         sending={false}
         disabledReason="This conversation is closed."
+        message=""
+        onMessageChange={vi.fn()}
         onSend={vi.fn()}
       />,
     );

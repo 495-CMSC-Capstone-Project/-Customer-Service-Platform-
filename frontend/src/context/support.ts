@@ -9,6 +9,13 @@ import type {
   Ticket,
 } from "../types/support";
 
+export interface ConversationDraft {
+  message: string;
+  error: string | null;
+  storageWarning: boolean;
+  revision: number;
+}
+
 export interface SupportContextValue {
   store: PrototypeStore;
   sendingConversationId: string | null;
@@ -16,6 +23,8 @@ export interface SupportContextValue {
   customerConversations: Conversation[];
   registerCustomer: (customerId: string, name: string) => void;
   createConversation: () => string;
+  getDraft: (conversationId: string) => ConversationDraft;
+  setDraftMessage: (conversationId: string, message: string) => void;
   sendMessage: (
     conversationId: string,
     message: string,

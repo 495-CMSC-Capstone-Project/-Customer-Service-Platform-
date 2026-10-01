@@ -17,6 +17,8 @@ export function ChatPage() {
     storageWarning,
     sendingConversationId,
     sendMessage,
+    getDraft,
+    setDraftMessage,
     getMessages,
     getTicket,
     getFeedback,
@@ -63,6 +65,7 @@ export function ChatPage() {
   const isLive = conversationId === LIVE_CONVERSATION_ID;
   const needsReview = isLive && conversation.status === ConversationStatus.ESCALATED;
   const canLeaveFeedback = !feedback;
+  const draft = getDraft(conversationId);
 
   return (
     <section className="chat-page">
@@ -104,7 +107,10 @@ export function ChatPage() {
 
       <Composer
         key={`${customerId}:${conversationId}`}
-        draftKey={`csp-draft:${customerId}:${conversationId}`}
+        message={draft.message}
+        onMessageChange={(message) => setDraftMessage(conversationId, message)}
+        sendError={draft.error}
+        draftWarning={draft.storageWarning}
         disabled={!isLive}
         sending={sending}
         disabledReason={

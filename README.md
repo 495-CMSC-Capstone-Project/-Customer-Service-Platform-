@@ -397,6 +397,8 @@ Successful API responses are checked for required fields and the expected
 conversation ID before being added to the visible history. The 20-second timeout
 covers both the request and reading its response body. Failed sends keep the
 draft available for manual retry and do not update the local conversation timestamp.
+Drafts and retry errors survive in-app navigation. Successful responses clear only
+the matching submitted draft revision, including when the chat page was unmounted.
 Timeouts cannot prove whether the backend saved a message; the API does not
 currently provide idempotency keys, so retries are not an exactly-once guarantee.
 
@@ -436,14 +438,14 @@ npm run build
 npm run check:bundle-size
 ```
 
-The frontend suite contains 44 tests across seven files, including 15 App-level
+The frontend suite contains 53 tests across seven files, including 24 App-level
 workflow tests using real React pages and providers with mocked network responses.
 The coverage scope includes the API client, composer, authentication state and
 dialog, support state, chat, feedback, conversation list, and support helpers.
-The verified local baseline on October 1, 2026 is 91.62% lines, 90.62% statements,
-83.61% branches, and 97.19% functions. These are scoped coverage figures, not
+The verified local baseline on October 1, 2026 is 92.41% lines, 91.42% statements,
+83.91% branches, and 97.29% functions. These are scoped coverage figures, not
 whole-application coverage or a live-provider end-to-end test.
-The bundle check records 84,209 bytes (82.24 KiB) of JavaScript gzip size against
+The bundle check records 84,613 bytes (82.63 KiB) of JavaScript gzip size against
 a 100 KiB budget and 3,195 bytes (3.12 KiB) of CSS against a 25 KiB budget.
 
 See [the frontend guide](frontend/README.md) for customer workflows, recovery

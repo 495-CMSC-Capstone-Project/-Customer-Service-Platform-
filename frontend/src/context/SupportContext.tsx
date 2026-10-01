@@ -18,9 +18,26 @@ import {
 } from "../types/support";
 import { createId } from "../utils/ids";
 import { useAuth } from "./auth";
-import { SupportContext } from "./support";
+import { SupportContext, type ConversationDraft } from "./support";
 
 const STORE_KEY = "csp-support-store-v2";
+
+const EMPTY_DRAFT: ConversationDraft = { message: "", error: null, storageWarning: false, revision: 0 };
+
+function loadDrafts() {
+  const entries: Record<string, ConversationDraft> = {};
+  try {
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith("csp-draft:")) {
+        entries[key] = { ...EMPTY_DRAFT, message: sessionStorage.getItem(key) ?? "" };
+      }
+    }
+    return { entries, readWarning: false };
+  } catch {
+    return { entries, readWarning: true };
+  }
+}
 
 function loadStore(): PrototypeStore {
   try {
@@ -53,6 +70,37 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef(store);
   const pendingRequest = useRef(false);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  // Keep drafts beside the request state so route changes do not reset them.
+  const [draftState, setDraftState] = useState(loadDrafts);
+  const drafts = draftState.entries;
+  const draftsRef = useRef(drafts);
+
+  const saveDraft = useCallback((key: string, draft: ConversationDraft, persist = false) => {
+    let nextDraft = draft;
+    if (persist) {
+      try {
+        if (draft.message) sessionStorage.setItem(key, draft.message);
+        else sessionStorage.removeItem(key);
+        nextDraft = { ...draft, storageWarning: false };
+      } catch {
+        nextDraft = { ...draft, storageWarning: true };
+      }
+    }
+    const next = { ...draftsRef.current, [key]: nextDraft };
+    draftsRef.current = next;
+    setDraftState((current) => ({ ...current, entries: next }));
+  }, []);
+
+  const getDraft = useCallback((conversationId: string) => {
+    const key = `csp-draft:${customerId}:${conversationId}`;
+    return drafts[key] ?? { ...EMPTY_DRAFT, storageWarning: draftState.readWarning };
+  }, [customerId, drafts, draftState.readWarning]);
+
+  const setDraftMessage = useCallback((conversationId: string, message: string) => {
+    const key = `csp-draft:${customerId}:${conversationId}`;
+    const current = draftsRef.current[key] ?? EMPTY_DRAFT;
+    saveDraft(key, { ...current, message, error: null, revision: current.revision + 1 }, true);
+  }, [customerId, saveDraft]);
 
   const persistStore = useCallback((next: PrototypeStore) => {
     try {
@@ -154,6 +202,9 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       // Lock immediately: React state alone cannot prevent two sends in one event turn.
       pendingRequest.current = true;
       setSendingConversationId(conversationId);
+      const draftKey = `csp-draft:${customerId}:${conversationId}`;
+      const submittedDraft = draftsRef.current[draftKey] ?? EMPTY_DRAFT;
+      saveDraft(draftKey, { ...submittedDraft, error: null });
       const sentAt = new Date().toISOString();
       try {
         const result = await sendCustomerMessage(conversationId, { customerId, message: trimmed });
@@ -177,14 +228,25 @@ export function SupportProvider({ children }: { children: ReactNode }) {
             ? { ...item, status: result.escalated ? ConversationStatus.ESCALATED : ConversationStatus.ACTIVE, updatedAt: replyAt }
             : item),
         }));
+        const currentDraft = draftsRef.current[draftKey];
+        // A late response belongs to the submitted revision, not a newer draft.
+        if (currentDraft.revision === submittedDraft.revision && currentDraft.message.trim() === trimmed) {
+          saveDraft(draftKey, { ...currentDraft, message: "", error: null, revision: currentDraft.revision + 1 }, true);
+        }
         // The API flags escalation but does not confirm a ticket or queue assignment.
         return result;
+      } catch (cause) {
+        const currentDraft = draftsRef.current[draftKey];
+        if (currentDraft.revision === submittedDraft.revision) {
+          saveDraft(draftKey, { ...currentDraft, error: cause instanceof Error ? cause.message : "Unable to send the message." });
+        }
+        throw cause;
       } finally {
         pendingRequest.current = false;
         setSendingConversationId(null);
       }
     },
-    [customerId, updateStore],
+    [customerId, updateStore, saveDraft],
   );
 
   const submitFeedback = useCallback(
@@ -303,6 +365,8 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       customerConversations,
       registerCustomer,
       createConversation,
+      getDraft,
+      setDraftMessage,
       sendMessage,
       submitFeedback,
       getMessages,
@@ -317,6 +381,8 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       customerConversations,
       registerCustomer,
       createConversation,
+      getDraft,
+      setDraftMessage,
       sendMessage,
       submitFeedback,
       getMessages,

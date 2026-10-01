@@ -6,7 +6,10 @@ interface ComposerProps {
   disabled: boolean;
   sending: boolean;
   disabledReason?: string;
-  draftKey?: string;
+  message: string;
+  onMessageChange: (message: string) => void;
+  sendError?: string | null;
+  draftWarning?: boolean;
   onSend: (message: string) => Promise<void>;
 }
 
@@ -14,15 +17,14 @@ export function Composer({
   disabled,
   sending,
   disabledReason,
-  draftKey,
+  message,
+  onMessageChange,
+  sendError,
+  draftWarning = false,
   onSend,
 }: ComposerProps) {
-  const [message, setMessage] = useState(() => {
-    try { return draftKey ? sessionStorage.getItem(draftKey) ?? "" : ""; }
-    catch { return ""; }
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [draftWarning, setDraftWarning] = useState(false);
+  const [validationError, setError] = useState<string | null>(null);
+  const error = validationError ?? sendError ?? null;
   const inFlight = useRef(false);
   const trimmedMessage = message.trim();
   const length = trimmedMessage.length;
@@ -55,25 +57,12 @@ export function Composer({
     inFlight.current = true;
     try {
       await onSend(trimmedMessage);
-      setMessage("");
-      persistDraft("");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to send the message.",
       );
     } finally {
       inFlight.current = false;
-    }
-  }
-
-  function persistDraft(value: string) {
-    if (!draftKey) return;
-    try {
-      if (value) sessionStorage.setItem(draftKey, value);
-      else sessionStorage.removeItem(draftKey);
-      setDraftWarning(false);
-    } catch {
-      setDraftWarning(true);
     }
   }
 
@@ -94,8 +83,7 @@ export function Composer({
         aria-invalid={Boolean(error)}
         aria-errormessage={error ? errorId : undefined}
         onChange={(event) => {
-          setMessage(event.target.value);
-          persistDraft(event.target.value);
+          onMessageChange(event.target.value);
           setError(null);
         }}
       />
@@ -121,7 +109,7 @@ export function Composer({
         </p>
       ) : null}
       <ErrorMessage id={errorId} message={error} />
-      {draftWarning ? <p className="field-hint" role="status">Your draft is kept on this page only because browser storage is unavailable.</p> : null}
+      {draftWarning ? <p className="field-hint" role="status">Draft changes are kept in this tab only because browser storage is unavailable. Reloading may lose changes or restore an older draft.</p> : null}
     </form>
   );
 }
