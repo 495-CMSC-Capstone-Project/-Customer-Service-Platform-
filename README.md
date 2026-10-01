@@ -19,6 +19,7 @@ The current Alpha implementation includes:
 - AI response generation through an external AI provider
 - AI confidence information
 - Escalation indication for requests requiring human assistance
+- Conversation dashboard with status totals, search, filtering, sorting, and ticket details
 - Customer and AI message persistence
 - PostgreSQL database integration
 - Error handling for invalid requests and unavailable services
@@ -33,7 +34,7 @@ The current Alpha implementation includes:
 - React 19
 - TypeScript
 - Vite
-- ESLint
+- Oxlint
 
 ### Backend
 
@@ -319,7 +320,7 @@ Run the development server:
 npm run dev
 ```
 
-Run ESLint:
+Run Oxlint:
 
 ```bash
 npm run lint
@@ -431,12 +432,13 @@ npm run build
 npm run check:bundle-size
 ```
 
-The current frontend suite contains 17 tests across four files. Coverage is
-scoped to the API client, message composer, authentication-modal state, and
-prototype support helpers, with a verified baseline of 92.98% lines, 93.1%
-statements, 87.39% branches, and 100% functions. The production bundle check
-records approximately 80.34 kB of JavaScript gzip size against a 100 kB budget
-and 2.68 kB of CSS gzip size against a 25 kB budget.
+The current frontend suite contains 25 tests across six files. Coverage is
+scoped to selected modules, including the API client, message composer,
+authentication-modal state, conversation dashboard controls, filtering logic,
+and prototype support helpers. The verified baseline is 94.16% lines, 94.24%
+statements, 88.05% branches, and 100% functions. The production bundle check
+records approximately 81.59 kB of JavaScript gzip size against a 100 kB budget
+and 3.90 kB of CSS gzip size against a 25 kB budget.
 
 ## CI/CD
 
@@ -445,7 +447,7 @@ GitHub Actions is used to automatically validate project changes.
 The current CI process includes:
 
 - Backend automated tests
-- Frontend ESLint checks
+- Frontend Oxlint checks
 - Frontend API unit tests
 - Frontend component and support-helper tests
 - Enforced frontend coverage thresholds

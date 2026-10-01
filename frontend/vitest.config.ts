@@ -10,8 +10,10 @@ export default defineConfig({
       include: [
         "src/api/conversations.ts",
         "src/components/chat/Composer.tsx",
+        "src/components/conversations/ConversationFilters.tsx",
         "src/context/AuthModalContext.tsx",
         "src/context/authModal.ts",
+        "src/utils/conversationFilters.ts",
         "src/utils/prototypeAi.ts",
       ],
       thresholds: {
