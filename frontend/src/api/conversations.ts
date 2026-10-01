@@ -5,6 +5,8 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const INVALID_RESPONSE_MESSAGE =
   "The support API returned an invalid response. Please try again.";
 
+class SupportApiError extends Error {}
+
 interface SendMessageRequest {
   customerId: string;
   message: string;
@@ -23,12 +25,11 @@ export async function sendCustomerMessage(
   conversationId: string,
   payload: SendMessageRequest,
 ): Promise<SendMessageResult> {
-  let response: Response;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    response = await fetch(
+    const response = await fetch(
       `${API_BASE_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}/messages`,
       {
         method: "POST",
@@ -42,10 +43,28 @@ export async function sendCustomerMessage(
         }),
       },
     );
+
+    if (!response.ok) {
+      throw new SupportApiError(messageForStatus(response.status));
+    }
+
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      throw new SupportApiError(INVALID_RESPONSE_MESSAGE);
+    }
+
+    if (!isChatApiResponse(data) || data.conversationId !== conversationId) {
+      throw new SupportApiError(INVALID_RESPONSE_MESSAGE);
+    }
+    return data;
   } catch (error) {
+    if (error instanceof SupportApiError) throw error;
     if (isAbortError(error)) {
       throw new Error(
-        "The support API took too long to respond. Please try again.",
+        "The support API took too long to respond. The request may have reached the server; retry only if needed.",
       );
     }
     throw new Error(
@@ -55,29 +74,6 @@ export async function sendCustomerMessage(
     clearTimeout(timeoutId);
   }
 
-  if (!response.ok) {
-    throw new Error(messageForStatus(response.status));
-  }
-
-  let data: unknown;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error(INVALID_RESPONSE_MESSAGE);
-  }
-
-  if (!isChatApiResponse(data)) {
-    throw new Error(INVALID_RESPONSE_MESSAGE);
-  }
-
-  return {
-    conversationId: data.conversationId,
-    messageId: data.messageId,
-    response: data.response,
-    source: data.source === "HUMAN" ? "HUMAN" : "AI",
-    confidence: data.confidence,
-    escalated: data.escalated,
-  };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -93,6 +89,8 @@ export function messageForStatus(status: number): string {
   switch (status) {
     case 400:
       return "The message could not be processed.";
+    case 401:
+      return "Your session is not authorized. Sign in again before retrying.";
     case 403:
       return "You do not have access to this conversation.";
     case 404:
@@ -118,6 +116,7 @@ function isChatApiResponse(value: unknown): value is ChatApiResponse {
     typeof response.messageId === "string" &&
     response.messageId.length > 0 &&
     typeof response.response === "string" &&
+    response.response.trim().length > 0 &&
     (response.source === "AI" || response.source === "HUMAN") &&
     typeof response.confidence === "number" &&
     Number.isFinite(response.confidence) &&

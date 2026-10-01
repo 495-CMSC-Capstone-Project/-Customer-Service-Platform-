@@ -85,6 +85,41 @@ describe("sendCustomerMessage", () => {
     );
   });
 
+  it.each([
+    { conversationId: "someone_else", response: "Do not show this reply" },
+    { conversationId: "conv_001", response: "   " },
+  ])("rejects an unrelated or empty reply: %j", async (invalid) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      messageId: "reply_1", source: "AI", confidence: 0.8, escalated: false, ...invalid,
+    })));
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+      .rejects.toThrow("invalid response");
+  });
+
+  it("keeps the timeout active while reading the response body", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url, options: RequestInit) => Promise.resolve({
+      ok: true,
+      json: () => new Promise((_resolve, reject) => {
+        options.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }),
+    })));
+    const result = expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+      .rejects.toThrow("took too long");
+    await vi.advanceTimersByTimeAsync(20_000);
+    await result;
+  });
+
+  it("rejects non-JSON success responses and returns a useful unauthorized message", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response("not json", { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 })));
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+      .rejects.toThrow("invalid response");
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+      .rejects.toThrow("not authorized");
+  });
+
   it("stops waiting when the API request times out", async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
@@ -103,7 +138,7 @@ describe("sendCustomerMessage", () => {
       message: "Help",
     });
     const result = expect(request).rejects.toThrow(
-      "The support API took too long to respond. Please try again.",
+      "The support API took too long to respond. The request may have reached the server; retry only if needed.",
     );
 
     await vi.advanceTimersByTimeAsync(20_000);

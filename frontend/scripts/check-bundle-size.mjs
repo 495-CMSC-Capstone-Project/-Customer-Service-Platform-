@@ -52,7 +52,7 @@ await writeFile(
   `${JSON.stringify(report, null, 2)}\n`,
 );
 
-const toKilobytes = (bytes) => `${(bytes / 1024).toFixed(2)} kB`;
+const toKilobytes = (bytes) => `${(bytes / 1024).toFixed(2)} KiB`;
 console.log(
   `JavaScript gzip: ${toKilobytes(totals.javascriptGzipBytes)} / ${toKilobytes(limits.javascriptGzipBytes)}`,
 );

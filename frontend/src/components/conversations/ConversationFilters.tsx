@@ -62,7 +62,7 @@ export function ConversationFilters({
           <input
             type="search"
             value={query}
-            placeholder="Search messages, tickets, or queues"
+            placeholder="Search previews, IDs, or queues"
             onChange={(event) => onQueryChange(event.target.value)}
           />
         </label>

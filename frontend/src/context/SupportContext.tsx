@@ -11,14 +11,12 @@ import { createSeed, LIVE_CONVERSATION_ID } from "../data/seed";
 import {
   ConversationStatus,
   SenderType,
-  TicketStatus,
   type Conversation,
   type Feedback,
   type PrototypeStore,
   type ResolutionType,
 } from "../types/support";
 import { createId } from "../utils/ids";
-import { assignQueue, summarizeMessage } from "../utils/prototypeAi";
 import { useAuth } from "./auth";
 import { SupportContext } from "./support";
 
@@ -53,36 +51,37 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     string | null
   >(null);
   const storeRef = useRef(store);
+  const pendingRequest = useRef(false);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  const persistStore = useCallback((next: PrototypeStore) => {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+      setStorageWarning(null);
+    } catch {
+      setStorageWarning("Browser storage is unavailable. Changes are available on this page but may be lost when you reload.");
+    }
+  }, []);
+
+  const updateStore = useCallback((update: (current: PrototypeStore) => PrototypeStore) => {
+    const next = update(storeRef.current);
+    storeRef.current = next;
+    setStore(next);
+    persistStore(next);
+  }, [persistStore]);
 
   useEffect(() => {
-    storeRef.current = store;
-  }, [store]);
-
-  if (
-    customerId &&
-    !store.customers.some((customer) => customer.customerId === customerId)
-  ) {
-    setStore((current) => {
-      if (current.customers.some((customer) => customer.customerId === customerId)) {
-        return current;
-      }
-      return {
+    if (customerId && !storeRef.current.customers.some((item) => item.customerId === customerId)) {
+      updateStore((current) => ({
         ...current,
-        customers: [
-          ...current.customers,
-          {
-            customerId,
-            name: "Customer",
-            accountStatus: "ACTIVE",
-          },
-        ],
-      };
-    });
-  }
+        customers: [...current.customers, { customerId, name: "Customer", accountStatus: "ACTIVE" }],
+      }));
+    }
+  }, [customerId, updateStore]);
 
   useEffect(() => {
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  }, [store]);
+    persistStore(storeRef.current);
+  }, [persistStore]);
 
   const customerConversations = useMemo(() => {
     if (!customerId) {
@@ -109,7 +108,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       throw new Error("That customer ID is already in use. Sign in instead.");
     }
 
-    setStore((current) => ({
+    updateStore((current) => ({
       ...current,
       customers: [
         ...current.customers,
@@ -120,7 +119,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
         },
       ],
     }));
-  }, []);
+  }, [updateStore]);
 
   const createConversation = useCallback(() => {
     if (!customerId) {
@@ -143,160 +142,49 @@ export function SupportProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(
     async (conversationId: string, message: string) => {
-      if (!customerId) {
-        throw new Error("You need to sign in first.");
-      }
-
+      if (!customerId) throw new Error("You need to sign in first.");
       const trimmed = message.trim();
-      if (trimmed.length < 1 || trimmed.length > 2000) {
-        throw new Error("Message must contain 1–2,000 characters.");
-      }
+      if (!trimmed || trimmed.length > 2000) throw new Error("Message must contain 1–2,000 characters.");
+      const conversation = storeRef.current.conversations.find((item) => item.conversationId === conversationId);
+      if (!conversation) throw new Error("Conversation cannot be found.");
+      if (conversation.customerId !== customerId) throw new Error("You do not have access to this conversation.");
+      if (conversationId !== LIVE_CONVERSATION_ID) throw new Error("This is a read-only sample conversation. Open the live demo to send a message.");
+      if (pendingRequest.current) throw new Error("Please wait for the current reply before sending another message.");
 
-      const conversation = storeRef.current.conversations.find(
-        (item) => item.conversationId === conversationId,
-      );
-      if (!conversation) {
-        throw new Error("Conversation cannot be found.");
-      }
-      if (conversation.customerId !== customerId) {
-        throw new Error("You do not have access to this conversation.");
-      }
-      if (conversation.status !== ConversationStatus.ACTIVE) {
-        throw new Error(
-          "This conversation is no longer active. You can view the history or leave feedback.",
-        );
-      }
-
-      const now = new Date().toISOString();
-      const customerMessageId = createId("msg");
-      setStore((current) => ({
-        ...current,
-        messages: [
-          ...current.messages,
-          {
-            messageId: customerMessageId,
-            conversationId,
-            senderType: SenderType.CUSTOMER,
-            messageText: trimmed,
-            createdAt: now,
-          },
-        ],
-        conversations: current.conversations.map((item) =>
-          item.conversationId === conversationId
-            ? { ...item, updatedAt: now }
-            : item,
-        ),
-      }));
+      // Lock immediately: React state alone cannot prevent two sends in one event turn.
+      pendingRequest.current = true;
       setSendingConversationId(conversationId);
-
+      const sentAt = new Date().toISOString();
       try {
-        const result = await sendCustomerMessage(conversationId, {
-          customerId,
-          message: trimmed,
-        });
+        const result = await sendCustomerMessage(conversationId, { customerId, message: trimmed });
         const replyAt = new Date().toISOString();
-
-        setStore((current) => {
-          const messages = [
+        updateStore((current) => ({
+          ...current,
+          messages: [
             ...current.messages,
+            { messageId: createId("msg"), conversationId, senderType: SenderType.CUSTOMER, messageText: trimmed, createdAt: sentAt },
             {
               messageId: result.messageId,
               conversationId,
-              senderType: SenderType.AI,
+              senderType: result.source === "HUMAN" ? SenderType.HUMAN : SenderType.AI,
               messageText: result.response,
               source: result.source,
               confidence: result.confidence,
               createdAt: replyAt,
             },
-          ];
-
-          if (!result.escalated) {
-            return {
-              ...current,
-              messages,
-              conversations: current.conversations.map((item) =>
-                item.conversationId === conversationId
-                  ? { ...item, updatedAt: replyAt }
-                  : item,
-              ),
-            };
-          }
-
-          const hasActiveTicket = current.tickets.some(
-            (ticket) =>
-              ticket.conversationId === conversationId &&
-              (ticket.status === TicketStatus.OPEN ||
-                ticket.status === TicketStatus.IN_PROGRESS),
-          );
-          if (hasActiveTicket) {
-            return {
-              ...current,
-              messages,
-              conversations: current.conversations.map((item) =>
-                item.conversationId === conversationId
-                  ? {
-                      ...item,
-                      status: ConversationStatus.ESCALATED,
-                      updatedAt: replyAt,
-                    }
-                  : item,
-              ),
-            };
-          }
-
-          const ticketId = createId("ticket");
-          const queue = assignQueue(trimmed, "escalation");
-          return {
-            ...current,
-            messages: [
-              ...messages,
-              {
-                messageId: createId("msg"),
-                conversationId,
-                senderType: SenderType.SYSTEM,
-                messageText: `This issue was sent to ${queue}. Ticket ${ticketId} is OPEN.`,
-                createdAt: replyAt,
-              },
-            ],
-            tickets: [
-              ...current.tickets,
-              {
-                ticketId,
-                conversationId,
-                reason: "CUSTOMER_REQUEST",
-                summary: summarizeMessage(trimmed),
-                status: TicketStatus.OPEN,
-                assignedQueue: queue,
-                createdAt: replyAt,
-                updatedAt: replyAt,
-              },
-            ],
-            conversations: current.conversations.map((item) =>
-              item.conversationId === conversationId
-                ? {
-                    ...item,
-                    status: ConversationStatus.ESCALATED,
-                    updatedAt: replyAt,
-                  }
-                : item,
-            ),
-          };
-        });
-
-        return result;
-      } catch (error) {
-        setStore((current) => ({
-          ...current,
-          messages: current.messages.filter(
-            (item) => item.messageId !== customerMessageId,
-          ),
+          ],
+          conversations: current.conversations.map((item) => item.conversationId === conversationId
+            ? { ...item, status: result.escalated ? ConversationStatus.ESCALATED : ConversationStatus.ACTIVE, updatedAt: replyAt }
+            : item),
         }));
-        throw error;
+        // The API flags escalation but does not confirm a ticket or queue assignment.
+        return result;
       } finally {
+        pendingRequest.current = false;
         setSendingConversationId(null);
       }
     },
-    [customerId],
+    [customerId, updateStore],
   );
 
   const submitFeedback = useCallback(
@@ -320,6 +208,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       if (conversation.customerId !== customerId) {
         throw new Error("You do not have access to this conversation.");
       }
+      if (pendingRequest.current) throw new Error("Wait for the current reply before leaving feedback.");
       if (storeRef.current.feedback.some((item) => item.conversationId === conversationId)) {
         throw new Error("Feedback has already been recorded for this conversation.");
       }
@@ -337,18 +226,17 @@ export function SupportProvider({ children }: { children: ReactNode }) {
         createdAt: now,
       };
 
-      setStore((current) => ({
+      updateStore((current) => ({
         ...current,
         feedback: [...current.feedback, feedback],
         conversations: current.conversations.map((item) =>
           item.conversationId === conversationId
             ? {
                 ...item,
-                status: payload.successful
+                // Feedback is local only; it cannot close a live server conversation.
+                status: payload.successful && conversationId !== LIVE_CONVERSATION_ID
                   ? ConversationStatus.RESOLVED
-                  : item.status === ConversationStatus.ACTIVE
-                    ? ConversationStatus.RESOLVED
-                    : item.status,
+                  : item.status,
                 updatedAt: now,
               }
             : item,
@@ -357,7 +245,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
 
       return feedback;
     },
-    [customerId],
+    [customerId, updateStore],
   );
 
   const getMessages = useCallback(
@@ -375,6 +263,8 @@ export function SupportProvider({ children }: { children: ReactNode }) {
 
   const getTicket = useCallback(
     (conversationId: string) => {
+      // Legacy demo ticket IDs are not server confirmations.
+      if (conversationId === LIVE_CONVERSATION_ID) return undefined;
       return store.tickets
         .filter((ticket) => ticket.conversationId === conversationId)
         .sort(
@@ -408,6 +298,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       store,
+      storageWarning,
       sendingConversationId,
       customerConversations,
       registerCustomer,
@@ -421,6 +312,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     }),
     [
       store,
+      storageWarning,
       sendingConversationId,
       customerConversations,
       registerCustomer,

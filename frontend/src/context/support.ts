@@ -12,6 +12,7 @@ import type {
 export interface SupportContextValue {
   store: PrototypeStore;
   sendingConversationId: string | null;
+  storageWarning: string | null;
   customerConversations: Conversation[];
   registerCustomer: (customerId: string, name: string) => void;
   createConversation: () => string;

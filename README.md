@@ -19,7 +19,8 @@ The current Alpha implementation includes:
 - AI response generation through an external AI provider
 - AI confidence information
 - Escalation indication for requests requiring human assistance
-- Conversation dashboard with status totals, search, filtering, sorting, and ticket details
+- Conversation search, status filters, sorting, and clearly labelled sample ticket details
+- Draft recovery, retry controls, and local feedback that does not close a live conversation
 - Customer and AI message persistence
 - PostgreSQL database integration
 - Error handling for invalid requests and unavailable services
@@ -392,9 +393,12 @@ The frontend provides user-facing handling for several API conditions, including
 
 Unexpected service errors are also handled through a general fallback message.
 
-Successful API responses are checked before they are added to the conversation,
-and requests time out after 20 seconds instead of leaving the interface in a
-permanent loading state.
+Successful API responses are checked for required fields and the expected
+conversation ID before being added to the visible history. The 20-second timeout
+covers both the request and reading its response body. Failed sends keep the
+draft available for manual retry and do not update the local conversation timestamp.
+Timeouts cannot prove whether the backend saved a message; the API does not
+currently provide idempotency keys, so retries are not an exactly-once guarantee.
 
 The interface disables message submission while a request is being processed to help prevent duplicate submissions.
 
@@ -432,13 +436,18 @@ npm run build
 npm run check:bundle-size
 ```
 
-The current frontend suite contains 25 tests across six files. Coverage is
-scoped to selected modules, including the API client, message composer,
-authentication-modal state, conversation dashboard controls, filtering logic,
-and prototype support helpers. The verified baseline is 94.16% lines, 94.24%
-statements, 88.05% branches, and 100% functions. The production bundle check
-records approximately 81.59 kB of JavaScript gzip size against a 100 kB budget
-and 3.90 kB of CSS gzip size against a 25 kB budget.
+The frontend suite contains 44 tests across seven files, including 15 App-level
+workflow tests using real React pages and providers with mocked network responses.
+The coverage scope includes the API client, composer, authentication state and
+dialog, support state, chat, feedback, conversation list, and support helpers.
+The verified local baseline on October 1, 2026 is 91.62% lines, 90.62% statements,
+83.61% branches, and 97.19% functions. These are scoped coverage figures, not
+whole-application coverage or a live-provider end-to-end test.
+The bundle check records 84,209 bytes (82.24 KiB) of JavaScript gzip size against
+a 100 KiB budget and 3,195 bytes (3.12 KiB) of CSS against a 25 KiB budget.
+
+See [the frontend guide](frontend/README.md) for customer workflows, recovery
+behavior, and the boundary between live API functionality and local demo data.
 
 ## CI/CD
 
@@ -495,6 +504,13 @@ Draft pull requests may be used while a feature or integration effort is still u
 - The frontend communicates with the backend through the defined API rather than accessing the database or external AI provider directly.
 
 ## Project Status
+
+The live demo uses `cust_001` / `conv_001`. New profiles, the visible conversation
+list, browser history, and feedback are local demo features, not backend account
+or history APIs. Sample conversations cannot send messages. An `escalated` API
+result recommends human review but does not confirm a ticket or connect an agent.
+The frontend does not invent a live ticket ID or queue assignment. The backend's
+confidence field is a demo score, not a calibrated probability of correctness.
 
 This repository represents the **Alpha release** of the Customer Service Platform.
 

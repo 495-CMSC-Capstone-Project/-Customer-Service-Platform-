@@ -4,7 +4,8 @@ import { StatusBadge } from "../components/common/StatusBadge";
 import { ErrorMessage } from "../components/common/ErrorMessage";
 import { ConversationFilters } from "../components/conversations/ConversationFilters";
 import { useSupport } from "../context/support";
-import { ConversationStatus } from "../types/support";
+import { useAuthModal } from "../context/authModal";
+import { LIVE_CONVERSATION_ID } from "../data/seed";
 import {
   ConversationSort,
   ConversationStatusFilter,
@@ -13,69 +14,30 @@ import {
 } from "../utils/conversationFilters";
 import { formatDateTime, formatStatus } from "../utils/format";
 
-const summaryCards = [
-  {
-    status: ConversationStatus.ACTIVE,
-    label: "Active",
-    detail: "Ready for a new message",
-  },
-  {
-    status: ConversationStatus.ESCALATED,
-    label: "Escalated",
-    detail: "Waiting for human support",
-  },
-  {
-    status: ConversationStatus.RESOLVED,
-    label: "Resolved",
-    detail: "Completed successfully",
-  },
-  {
-    status: ConversationStatus.CLOSED,
-    label: "Closed",
-    detail: "Saved in conversation history",
-  },
-] as const;
-
 export function ConversationsPage() {
   const navigate = useNavigate();
-  const { customerConversations, createConversation, getPreview, getTicket } =
-    useSupport();
+  const { openSignIn } = useAuthModal();
+  const { customerConversations, storageWarning, createConversation, getPreview, getTicket } = useSupport();
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<ConversationStatusFilter>(
-    ConversationStatusFilter.ALL,
-  );
+  const [status, setStatus] = useState<ConversationStatusFilter>(ConversationStatusFilter.ALL);
   const [sort, setSort] = useState<ConversationSort>(ConversationSort.NEWEST);
+  const hasLive = customerConversations.some((item) => item.conversationId === LIVE_CONVERSATION_ID);
 
-  const counts = useMemo(
-    () => getConversationStatusCounts(customerConversations),
-    [customerConversations],
-  );
-  const conversationItems = useMemo(
-    () =>
-      customerConversations.map((conversation) => ({
-        conversation,
-        preview: getPreview(conversation.conversationId),
-        ticket: getTicket(conversation.conversationId),
-      })),
-    [customerConversations, getPreview, getTicket],
-  );
-  const visibleConversations = useMemo(
-    () => filterAndSortConversations(conversationItems, { query, status, sort }),
-    [conversationItems, query, sort, status],
-  );
+  const counts = useMemo(() => getConversationStatusCounts(customerConversations), [customerConversations]);
+  const items = useMemo(() => customerConversations.map((conversation) => ({
+    conversation,
+    preview: getPreview(conversation.conversationId),
+    ticket: getTicket(conversation.conversationId),
+  })), [customerConversations, getPreview, getTicket]);
+  const visible = useMemo(() => filterAndSortConversations(items, { query, status, sort }), [items, query, status, sort]);
 
   function handleStart() {
     setError(null);
     try {
-      const conversationId = createConversation();
-      navigate(`/conversations/${conversationId}`);
+      navigate("/conversations/" + createConversation());
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Unable to start a conversation.",
-      );
+      setError(cause instanceof Error ? cause.message : "Unable to open the conversation.");
     }
   }
 
@@ -87,112 +49,62 @@ export function ConversationsPage() {
 
   return (
     <section className="page">
-      <div className="page-header">
+      <header className="page-header">
         <div>
           <p className="eyebrow">Your support</p>
           <h1>Conversations</h1>
-          <p className="page__lede">
-            Track recent requests, return to live support, and see which
-            conversations need a human follow-up.
-          </p>
+          <p className="page__lede">Continue your AI conversation or browse the sample support history.</p>
         </div>
-        <button type="button" className="button button--primary" onClick={handleStart}>
-          Open live AI chat
+        <button type="button" className="button button--primary" onClick={hasLive ? handleStart : openSignIn}>
+          {hasLive ? "Open live AI chat" : "Use demo profile"}
         </button>
-      </div>
+      </header>
       <ErrorMessage message={error} />
+      {storageWarning ? <p className="error-message" role="status">{storageWarning}</p> : null}
+      <p className="field-hint conversation-note">
+        History and feedback are stored in this browser. Sample conversations are read-only.
+        {hasLive ? " Only the live demo sends messages to the AI service." : " Sign in as cust_001 to try the live demo; new local profiles do not yet have server conversations."}
+      </p>
 
       {customerConversations.length === 0 ? (
         <div className="empty-state empty-state--panel">
-          <strong>No conversations yet</strong>
-          <p>Start a conversation to ask the assistant for help.</p>
+          <h2>No conversations for this profile</h2>
+          <p>Use the demo profile above to try AI support.</p>
         </div>
       ) : (
         <>
-          <dl className="conversation-summary" aria-label="Conversation summary">
-            {summaryCards.map((card) => (
-              <div
-                className={`summary-card summary-card--${card.status.toLowerCase()}`}
-                key={card.status}
-              >
-                <dt>
-                  <span className="summary-card__dot" aria-hidden="true" />
-                  {card.label}
-                </dt>
-                <dd>{counts[card.status]}</dd>
-                <p>{card.detail}</p>
-              </div>
-            ))}
-          </dl>
-
-          <div className="backend-note">
-            <span className="backend-note__pulse" aria-hidden="true" />
-            <p>
-              <strong>Live backend demo:</strong> sign in with customer ID
-              <code>cust_001</code> to open <code>conv_001</code>. New messages
-              are sent through FastAPI and the AI orchestration service.
-            </p>
-          </div>
-
-          <ConversationFilters
-            query={query}
-            status={status}
-            sort={sort}
-            counts={counts}
-            resultCount={visibleConversations.length}
-            onQueryChange={setQuery}
-            onStatusChange={setStatus}
-            onSortChange={setSort}
-            onClear={clearFilters}
-          />
-
-          {visibleConversations.length === 0 ? (
-            <div className="empty-state empty-state--panel empty-state--filtered">
-              <strong>No matching conversations</strong>
-              <p>Try another keyword or remove the current status filter.</p>
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={clearFilters}
-              >
-                Clear filters
-              </button>
+          <ConversationFilters query={query} status={status} sort={sort} counts={counts}
+            resultCount={visible.length} onQueryChange={setQuery} onStatusChange={setStatus}
+            onSortChange={setSort} onClear={clearFilters} />
+          {visible.length === 0 ? (
+            <div className="empty-state empty-state--panel">
+              <h2>No matching conversations</h2>
+              <p>Try another keyword or use Clear filters above.</p>
             </div>
           ) : (
             <ul className="conversation-list">
-              {visibleConversations.map(({ conversation, preview, ticket }) => (
-                <li key={conversation.conversationId}>
-                  <Link
-                    className="conversation-card"
-                    to={`/conversations/${conversation.conversationId}`}
-                    aria-label={`Open ${conversation.conversationId}, ${formatStatus(conversation.status)}`}
-                  >
-                    <div className="conversation-card__top">
-                      <div>
-                        <span className="conversation-card__label">
-                          Conversation
-                        </span>
+              {visible.map(({ conversation, preview, ticket }) => {
+                const isLive = conversation.conversationId === LIVE_CONVERSATION_ID;
+                const needsReview = isLive && conversation.status === "ESCALATED";
+                return (
+                  <li key={conversation.conversationId}>
+                    <Link className="conversation-card" to={"/conversations/" + conversation.conversationId}
+                      aria-label={`Open ${conversation.conversationId}, ${needsReview ? "Human review recommended" : formatStatus(conversation.status)}`}>
+                      <div className="conversation-card__top">
                         <strong>{conversation.conversationId}</strong>
+                        {needsReview ? <span className="status-badge status-badge--escalated">Human review recommended</span>
+                          : <StatusBadge status={conversation.status} />}
                       </div>
-                      <StatusBadge status={conversation.status} />
-                    </div>
-                    <p className="conversation-card__preview">{preview}</p>
-                    <p className="conversation-card__meta">
-                      <span>
+                      <p className="field-hint">{isLive ? "Live AI demo · local history" : "Sample conversation"}</p>
+                      <p className="conversation-card__preview">{preview}</p>
+                      <p className="conversation-card__meta">
                         Updated {formatDateTime(conversation.updatedAt)}
-                      </span>
-                      {ticket ? <span>Ticket {ticket.ticketId}</span> : null}
-                      {ticket ? <span>{ticket.assignedQueue}</span> : null}
-                    </p>
-                    <span
-                      className="conversation-card__action"
-                      aria-hidden="true"
-                    >
-                      Open conversation <span>→</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                        {ticket ? ` · Sample ticket ${ticket.ticketId} · ${ticket.assignedQueue}` : null}
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>

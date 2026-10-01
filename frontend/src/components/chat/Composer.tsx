@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { ErrorMessage } from "../common/ErrorMessage";
 import { LoadingState } from "../common/LoadingState";
 
@@ -6,6 +6,7 @@ interface ComposerProps {
   disabled: boolean;
   sending: boolean;
   disabledReason?: string;
+  draftKey?: string;
   onSend: (message: string) => Promise<void>;
 }
 
@@ -13,10 +14,16 @@ export function Composer({
   disabled,
   sending,
   disabledReason,
+  draftKey,
   onSend,
 }: ComposerProps) {
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => {
+    try { return draftKey ? sessionStorage.getItem(draftKey) ?? "" : ""; }
+    catch { return ""; }
+  });
   const [error, setError] = useState<string | null>(null);
+  const [draftWarning, setDraftWarning] = useState(false);
+  const inFlight = useRef(false);
   const trimmedMessage = message.trim();
   const length = trimmedMessage.length;
   const tooLong = length > 2000;
@@ -34,6 +41,7 @@ export function Composer({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (inFlight.current) return;
     if (!canSend) {
       if (length < 1) {
         setError("Message cannot be blank.");
@@ -44,13 +52,28 @@ export function Composer({
     }
 
     setError(null);
+    inFlight.current = true;
     try {
       await onSend(trimmedMessage);
       setMessage("");
+      persistDraft("");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to send the message.",
       );
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  function persistDraft(value: string) {
+    if (!draftKey) return;
+    try {
+      if (value) sessionStorage.setItem(draftKey, value);
+      else sessionStorage.removeItem(draftKey);
+      setDraftWarning(false);
+    } catch {
+      setDraftWarning(true);
     }
   }
 
@@ -72,6 +95,7 @@ export function Composer({
         aria-errormessage={error ? errorId : undefined}
         onChange={(event) => {
           setMessage(event.target.value);
+          persistDraft(event.target.value);
           setError(null);
         }}
       />
@@ -87,7 +111,7 @@ export function Composer({
           className="button button--primary"
           disabled={!canSend}
         >
-          {sending ? "Sending…" : "Send"}
+          {sending ? "Sending…" : error ? "Retry send" : "Send"}
         </button>
       </div>
       {sending ? <LoadingState /> : null}
@@ -97,6 +121,7 @@ export function Composer({
         </p>
       ) : null}
       <ErrorMessage id={errorId} message={error} />
+      {draftWarning ? <p className="field-hint" role="status">Your draft is kept on this page only because browser storage is unavailable.</p> : null}
     </form>
   );
 }

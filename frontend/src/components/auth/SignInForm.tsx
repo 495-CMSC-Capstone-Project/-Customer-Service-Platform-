@@ -52,6 +52,8 @@ export function SignInForm({
         autoComplete="username"
         placeholder={DEMO_CUSTOMER_ID}
         value={customerId}
+        maxLength={64}
+        required
         onChange={(event) => setCustomerId(event.target.value)}
       />
       <p className="field-hint">

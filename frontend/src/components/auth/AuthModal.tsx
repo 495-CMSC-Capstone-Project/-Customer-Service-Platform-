@@ -22,13 +22,34 @@ export function AuthModal() {
       if (event.key === "Escape") {
         closeAuthModal();
       }
+      if (event.key === "Tab") {
+        const controls = Array.from(panelRef.current?.querySelectorAll<HTMLElement>("*") ?? [])
+          .filter((control) => control.tabIndex >= 0 && !control.matches(":disabled") && !control.hidden);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+
+    function keepFocusInDialog(event: FocusEvent) {
+      if (event.target instanceof Node && !panelRef.current?.contains(event.target)) {
+        panelRef.current?.querySelector("input")?.focus();
+      }
     }
 
     document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("focusin", keepFocusInDialog);
 
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("focusin", keepFocusInDialog);
       if (previousFocus instanceof HTMLElement) {
         previousFocus.focus();
       }
@@ -68,12 +89,11 @@ export function AuthModal() {
           <>
             <h2 id="auth-modal-title">Sign up</h2>
             <p className="modal__lede">
-              Create a customer account to start a support conversation. You can
-              sign back in later with the same customer ID.
+              Create a local demo profile. New profiles do not have a live
+              conversation yet. Use the demo customer ID cust_001 to try AI support.
             </p>
             <SignUpForm
               idPrefix="modal-"
-              redirectTo="/conversations"
               onSuccess={closeAuthModal}
               onRequestSignIn={openSignIn}
             />
@@ -87,7 +107,6 @@ export function AuthModal() {
             </p>
             <SignInForm
               idPrefix="modal-"
-              redirectTo="/conversations"
               onSuccess={closeAuthModal}
               onRequestSignUp={openSignUp}
             />

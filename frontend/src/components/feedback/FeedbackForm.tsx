@@ -21,13 +21,17 @@ export function FeedbackForm({
 }: FeedbackFormProps) {
   const [resolutionType, setResolutionType] =
     useState<ResolutionTypeValue>(defaultResolutionType);
-  const [successful, setSuccessful] = useState("true");
+  const [successful, setSuccessful] = useState("");
   const [category, setCategory] = useState<string>(FeedbackCategory.GENERAL);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    if (!successful) {
+      setError("Choose whether your issue was resolved.");
+      return;
+    }
     try {
       onSubmit({
         resolutionType,
@@ -43,7 +47,7 @@ export function FeedbackForm({
 
   return (
     <form className="feedback-form" onSubmit={handleSubmit}>
-      <label htmlFor="resolution-type">How was this resolved?</label>
+      <label htmlFor="resolution-type">Which support did you use?</label>
       <select
         id="resolution-type"
         value={resolutionType}
@@ -51,16 +55,18 @@ export function FeedbackForm({
           setResolutionType(event.target.value as ResolutionTypeValue)
         }
       >
-        <option value={ResolutionType.AI_RESOLVED}>AI resolved</option>
-        <option value={ResolutionType.HUMAN_RESOLVED}>Human resolved</option>
+        <option value={ResolutionType.AI_RESOLVED}>AI assistant</option>
+        <option value={ResolutionType.HUMAN_RESOLVED}>Human agent</option>
       </select>
 
       <label htmlFor="feedback-success">Was the issue handled successfully?</label>
       <select
         id="feedback-success"
         value={successful}
+        required
         onChange={(event) => setSuccessful(event.target.value)}
       >
+        <option value="" disabled>Choose an outcome</option>
         <option value="true">Yes</option>
         <option value="false">No</option>
       </select>

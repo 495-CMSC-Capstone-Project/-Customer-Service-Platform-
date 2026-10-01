@@ -1,60 +1,96 @@
 # Customer Web Interface
 
-React + TypeScript frontend for the Customer Service Platform.
+React + TypeScript frontend for the Customer Service Platform. It preserves the
+team's FastAPI integration and clearly separates live messages from browser-only
+demo features.
+
+## Run locally
+
+Follow the root README to start PostgreSQL, seed `cust_001` / `conv_001`, configure
+the AI provider, and start FastAPI. Then run from this directory:
 
 ```bash
 npm ci
 npm run dev
 ```
 
-The Vite development server proxies `/api` requests to the FastAPI backend at
-`http://localhost:8000`.
+The Vite development server proxies `/api` to `http://localhost:8000`.
+For a deployed build, configure `VITE_API_BASE_URL` at build time or provide a
+same-origin `/api` reverse proxy; the development proxy is not part of `dist`.
 
-Run the frontend quality checks with:
+## Customer guide
+
+1. Sign in with customer ID `cust_001`. This selects a demo profile; it is not
+   password-based authentication.
+2. Choose **Open live AI chat**. Send a message containing 1–2,000 characters.
+   The frontend calls `POST /api/v1/conversations/conv_001/messages`.
+3. While waiting, sending is disabled and feedback is unavailable. A synchronous
+   lock prevents repeated clicks from creating overlapping requests.
+4. A successful reply is added to the visible history with the API response
+   source. Failed requests keep the draft and show a **Retry send** button.
+   The 20-second timeout covers both the request and response body. A timeout
+   may occur after the server accepted the message; manual retries are not an
+   exactly-once guarantee.
+5. Unsent drafts are stored in sessionStorage per customer and conversation,
+   so navigating away or refreshing the same tab can restore them. They are
+   cleared after a successful response, subject to browser storage availability.
+6. If the reply recommends human review, the UI explains that this demo does
+   not connect an agent or confirm a ticket. The customer can continue chatting.
+   The displayed confidence is a demo score, not a measured accuracy probability.
+7. **Leave feedback** requires an explicit Yes or No outcome. Feedback is local
+   only and does not close the live conversation. Storage failures display a
+   warning rather than claiming the data was saved.
+8. On **Conversations**, search previews, IDs, and sample queues, filter by status,
+   sort by update time, or clear the filters. Sample conversations have read-only
+   messages and labelled demonstration ticket details.
+
+Signing in from a protected conversation returns to that conversation. The
+sign-in dialog supports Escape, restores focus on close, and keeps keyboard
+focus inside the dialog. Newly created profiles are local only and have no live
+server conversation; the empty state offers an explicit demo sign-in instead of
+a start button that will fail.
+
+## Data boundaries
+
+The backend currently exposes a message-send API, not account registration,
+conversation listing, history retrieval, feedback, or ticket creation APIs.
+The frontend stores visible history and sample data in localStorage. Clearing
+browser storage does not delete backend messages; those messages are not
+reloaded into this UI. Legacy locally generated ticket IDs are not shown as
+confirmed handoffs for the live conversation. Existing stored data is preserved.
+
+Do not enter real credentials, private support records, or sensitive personal
+data. Browser profile selection is not a security boundary.
+
+## Validation
 
 ```bash
 npm run lint
-npm test
 npm run test:coverage
 npm run build
 npm run check:bundle-size
 ```
 
-The API client validates successful response data and stops requests that take
-longer than 20 seconds, so the chat does not remain stuck in a sending state.
+Local verification on October 1, 2026:
 
-The conversations dashboard gives customers a status overview and lets them
-search message previews, ticket IDs, and assigned queues. Results can be
-filtered by conversation status, sorted by update time, and cleared without
-leaving the page. The layout includes responsive mobile states and keyboard
-focus treatment for interactive controls.
+- 44 tests passed across seven files, including 15 App-level workflow tests.
+- 91.62% lines, 90.62% statements, 83.61% branches, 97.19% functions.
+- JavaScript gzip: 84,209 bytes (82.24 KiB), below the 100 KiB budget.
+- CSS gzip: 3,195 bytes (3.12 KiB), below the 25 KiB budget.
+- TypeScript build and lint passed.
 
-## Frontend Quality Evidence
+The App tests render the real pages, router, and providers and mock only network
+responses. They cover retries, request locking, drafts, deep-link sign-in,
+feedback, profile creation, storage failures, filtering, and honest escalation
+display. They are not a real-browser accessibility audit or a live AI-provider
+end-to-end test.
 
-The frontend test suite currently contains 25 tests across the API client,
-message composer, authentication-modal state, conversation dashboard controls,
-conversation filtering, and prototype support helpers.
-The coverage command enforces minimum thresholds for the modules included in
-the report and creates an HTML report plus `coverage-summary.json`.
+Coverage is scoped by `vitest.config.ts` to the API client, composer, filters,
+authentication state and dialog, support state, chat, feedback, conversation
+list, and support helpers. It is not whole-application coverage. Minimum gates
+remain 85% lines/statements, 80% functions, and 75% branches.
 
-The current verified frontend coverage baseline is:
-
-- 94.16% line coverage
-- 94.24% statement coverage
-- 88.05% branch coverage
-- 100% function coverage
-
-Coverage is intentionally reported for selected frontend modules, including the
-API client, message composer, authentication-modal state, conversation filters,
-dashboard controls, and support-classification helpers. It should not be
-presented as a whole-application coverage percentage.
-
-After `npm run build`, the bundle check records the production JavaScript and
-CSS gzip sizes in `reports/frontend-quality.json`. The current JavaScript bundle
-is approximately 81.59 kB gzip against a 100 kB budget, and the CSS bundle is
-approximately 3.90 kB gzip against a 25 kB budget.
-
-GitHub Actions runs linting, coverage tests, the production build, and the
-bundle budget for every frontend pull request to `main`. It uploads both the
-coverage/quality evidence and the production `dist` directory as downloadable
-workflow artifacts.
+GitHub Actions runs lint, coverage, build, and bundle budgets on relevant pull
+requests into `main`. It uploads `coverage`, `reports/frontend-quality.json`,
+and `dist` as workflow artifacts. These are CI/build artifacts, not proof of
+production deployment.
