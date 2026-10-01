@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useAuthModal } from "../../context/AuthModalContext";
+import { useAuthModal } from "../../context/authModal";
 import { SignInForm } from "./SignInForm";
 import { SignUpForm } from "./SignUpForm";
 

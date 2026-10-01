@@ -331,10 +331,24 @@ Run frontend unit tests:
 npm test
 ```
 
+Run frontend tests with enforced coverage thresholds and generate the HTML and
+JSON coverage reports:
+
+```bash
+npm run test:coverage
+```
+
 Build the frontend:
 
 ```bash
 npm run build
+```
+
+After building, verify that the production JavaScript and CSS bundles remain
+within the documented gzip-size budgets:
+
+```bash
+npm run check:bundle-size
 ```
 
 Preview the production build:
@@ -412,9 +426,17 @@ From the `frontend` directory, run:
 
 ```bash
 npm run lint
-npm test
+npm run test:coverage
 npm run build
+npm run check:bundle-size
 ```
+
+The current frontend suite contains 17 tests across four files. Coverage is
+scoped to the API client, message composer, authentication-modal state, and
+prototype support helpers, with a verified baseline of 92.98% lines, 93.1%
+statements, 87.39% branches, and 100% functions. The production bundle check
+records approximately 80.34 kB of JavaScript gzip size against a 100 kB budget
+and 2.68 kB of CSS gzip size against a 25 kB budget.
 
 ## CI/CD
 
@@ -425,7 +447,11 @@ The current CI process includes:
 - Backend automated tests
 - Frontend ESLint checks
 - Frontend API unit tests
+- Frontend component and support-helper tests
+- Enforced frontend coverage thresholds
 - Frontend TypeScript/Vite build validation
+- Frontend production bundle size budgets
+- Downloadable coverage, quality-metric, and production-build artifacts
 
 Pull requests should have successful CI checks before they are merged into `main`.
 

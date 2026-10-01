@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { DEMO_CUSTOMER_ID } from "../../data/seed";
 import { ErrorMessage } from "../common/ErrorMessage";
 

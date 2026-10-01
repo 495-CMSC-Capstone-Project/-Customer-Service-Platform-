@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { StatusBadge } from "../components/common/StatusBadge";
 import { ErrorMessage } from "../components/common/ErrorMessage";
-import { useSupport } from "../context/SupportContext";
+import { useSupport } from "../context/support";
 import { formatDateTime } from "../utils/format";
 
 export function ConversationsPage() {

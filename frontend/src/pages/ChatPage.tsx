@@ -4,8 +4,8 @@ import { Composer } from "../components/chat/Composer";
 import { EscalationBanner } from "../components/chat/EscalationBanner";
 import { MessageBubble } from "../components/chat/MessageBubble";
 import { StatusBadge } from "../components/common/StatusBadge";
-import { useAuth } from "../context/AuthContext";
-import { useSupport } from "../context/SupportContext";
+import { useAuth } from "../context/auth";
+import { useSupport } from "../context/support";
 import { ConversationStatus } from "../types/support";
 
 export function ChatPage() {

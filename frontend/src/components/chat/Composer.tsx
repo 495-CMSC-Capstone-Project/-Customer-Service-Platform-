@@ -17,14 +17,27 @@ export function Composer({
 }: ComposerProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const length = message.trim().length;
-  const tooLong = message.length > 2000;
+  const trimmedMessage = message.trim();
+  const length = trimmedMessage.length;
+  const tooLong = length > 2000;
   const canSend = !disabled && !sending && length >= 1 && !tooLong;
+  const characterCountId = "support-message-count";
+  const errorId = "support-message-error";
+  const disabledReasonId = "support-message-disabled-reason";
+  const describedBy = [
+    characterCountId,
+    error ? errorId : null,
+    disabled && disabledReason ? disabledReasonId : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSend) {
-      if (tooLong || (message.trim().length > 0 && (length < 1 || length > 2000))) {
+      if (length < 1) {
+        setError("Message cannot be blank.");
+      } else if (tooLong) {
         setError("Message must contain 1–2,000 characters.");
       }
       return;
@@ -32,7 +45,7 @@ export function Composer({
 
     setError(null);
     try {
-      await onSend(message);
+      await onSend(trimmedMessage);
       setMessage("");
     } catch (cause) {
       setError(
@@ -54,13 +67,19 @@ export function Composer({
         placeholder="Describe the issue in your own words"
         value={message}
         disabled={disabled || sending}
+        aria-describedby={describedBy}
+        aria-invalid={Boolean(error)}
+        aria-errormessage={error ? errorId : undefined}
         onChange={(event) => {
           setMessage(event.target.value);
           setError(null);
         }}
       />
       <div className="composer__row">
-        <p className={`char-count${tooLong ? " is-invalid" : ""}`}>
+        <p
+          id={characterCountId}
+          className={`char-count${tooLong ? " is-invalid" : ""}`}
+        >
           {message.length}/2000
         </p>
         <button
@@ -73,9 +92,11 @@ export function Composer({
       </div>
       {sending ? <LoadingState /> : null}
       {disabled && disabledReason ? (
-        <p className="composer__note">{disabledReason}</p>
+        <p id={disabledReasonId} className="composer__note">
+          {disabledReason}
+        </p>
       ) : null}
-      <ErrorMessage message={error} />
+      <ErrorMessage id={errorId} message={error} />
     </form>
   );
 }

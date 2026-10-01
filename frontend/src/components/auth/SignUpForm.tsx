@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { useSupport } from "../../context/SupportContext";
+import { useAuth } from "../../context/auth";
+import { useSupport } from "../../context/support";
 import { ErrorMessage } from "../common/ErrorMessage";
 import { createId } from "../../utils/ids";
 

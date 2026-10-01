@@ -43,13 +43,13 @@ export async function sendCustomerMessage(
       },
     );
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (isAbortError(error)) {
       throw new Error(
         "The support API took too long to respond. Please try again.",
       );
     }
     throw new Error(
-      "Unable to reach the support API. Confirm the backend is running on port 8000.",
+      "Unable to reach the support API. Check your connection and try again.",
     );
   } finally {
     clearTimeout(timeoutId);
@@ -78,6 +78,15 @@ export async function sendCustomerMessage(
     confidence: data.confidence,
     escalated: data.escalated,
   };
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
 }
 
 export function messageForStatus(status: number): string {

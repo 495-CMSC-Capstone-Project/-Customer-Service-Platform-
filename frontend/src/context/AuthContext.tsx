@@ -1,22 +1,12 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import { AuthContext, type AuthContextValue } from "./auth";
 
 const AUTH_STORAGE_KEY = "csp-prototype-customer-id";
-
-interface AuthContextValue {
-  customerId: string | null;
-  isAuthenticated: boolean;
-  login: (customerId: string) => void;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readStoredCustomerId(): string | null {
   try {
@@ -46,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }, []);
 
-  const value = useMemo(
+  const value = useMemo<AuthContextValue>(
     () => ({
       customerId,
       isAuthenticated: Boolean(customerId),
@@ -57,12 +47,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
 }

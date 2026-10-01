@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -16,43 +14,15 @@ import {
   TicketStatus,
   type Conversation,
   type Feedback,
-  type Message,
   type PrototypeStore,
   type ResolutionType,
-  type SendMessageResult,
-  type Ticket,
 } from "../types/support";
 import { createId } from "../utils/ids";
 import { assignQueue, summarizeMessage } from "../utils/prototypeAi";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./auth";
+import { SupportContext } from "./support";
 
 const STORE_KEY = "csp-support-store-v2";
-
-interface SupportContextValue {
-  store: PrototypeStore;
-  sendingConversationId: string | null;
-  customerConversations: Conversation[];
-  registerCustomer: (customerId: string, name: string) => void;
-  createConversation: () => string;
-  sendMessage: (
-    conversationId: string,
-    message: string,
-  ) => Promise<SendMessageResult>;
-  submitFeedback: (
-    conversationId: string,
-    payload: {
-      resolutionType: ResolutionType;
-      successful: boolean;
-      category: string;
-    },
-  ) => Feedback;
-  getMessages: (conversationId: string) => Message[];
-  getTicket: (conversationId: string) => Ticket | undefined;
-  getFeedback: (conversationId: string) => Feedback | undefined;
-  getPreview: (conversationId: string) => string;
-}
-
-const SupportContext = createContext<SupportContextValue | null>(null);
 
 function loadStore(): PrototypeStore {
   try {
@@ -83,7 +53,10 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     string | null
   >(null);
   const storeRef = useRef(store);
-  storeRef.current = store;
+
+  useEffect(() => {
+    storeRef.current = store;
+  }, [store]);
 
   if (
     customerId &&
@@ -464,14 +437,6 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   return (
     <SupportContext.Provider value={value}>{children}</SupportContext.Provider>
   );
-}
-
-export function useSupport(): SupportContextValue {
-  const context = useContext(SupportContext);
-  if (!context) {
-    throw new Error("useSupport must be used within SupportProvider");
-  }
-  return context;
 }
 
 function currentConversations(

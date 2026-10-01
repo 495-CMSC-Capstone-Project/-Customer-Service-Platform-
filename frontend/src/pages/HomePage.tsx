@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useAuthModal } from "../context/AuthModalContext";
+import { useAuth } from "../context/auth";
+import { useAuthModal } from "../context/authModal";
 
 const features = [
   {

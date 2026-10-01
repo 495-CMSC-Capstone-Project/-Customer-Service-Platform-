@@ -3,8 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { FeedbackForm } from "../components/feedback/FeedbackForm";
 import { StatusBadge } from "../components/common/StatusBadge";
 import { ErrorMessage } from "../components/common/ErrorMessage";
-import { useAuth } from "../context/AuthContext";
-import { useSupport } from "../context/SupportContext";
+import { useAuth } from "../context/auth";
+import { useSupport } from "../context/support";
 import { ConversationStatus, ResolutionType } from "../types/support";
 import { formatCategory, formatDateTime } from "../utils/format";
 

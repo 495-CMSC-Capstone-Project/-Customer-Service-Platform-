@@ -81,7 +81,7 @@ describe("sendCustomerMessage", () => {
         message: "Help",
       }),
     ).rejects.toThrow(
-      "Unable to reach the support API. Confirm the backend is running on port 8000.",
+      "Unable to reach the support API. Check your connection and try again.",
     );
   });
 
