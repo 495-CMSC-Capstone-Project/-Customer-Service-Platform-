@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.health_service import check_health
 
@@ -37,4 +38,21 @@ def test_health_is_healthy_when_database_and_ai_config_are_available(
 
     assert result.status == "HEALTHY"
     assert result.application_database == "AVAILABLE"
+    assert result.ai_provider == "CONFIGURED"
+
+
+def test_health_is_unavailable_when_database_check_fails(monkeypatch):
+    class FailingSession:
+        def execute(self, statement):
+            raise SQLAlchemyError("Database unavailable")
+
+    monkeypatch.setenv("AI_API_URL", "https://example.test/v1/chat")
+    monkeypatch.setenv("AI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_MODEL", "test-model")
+
+    result = check_health(FailingSession())
+
+    assert result.status == "UNAVAILABLE"
+    assert result.api == "AVAILABLE"
+    assert result.application_database == "UNAVAILABLE"
     assert result.ai_provider == "CONFIGURED"
