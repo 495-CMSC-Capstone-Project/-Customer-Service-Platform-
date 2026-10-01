@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-The Customer Service Platform is an AI-enabled customer support application designed to help customers receive automated assistance and escalate issues to a human agent when necessary.
+The Customer Service Platform gives customers an AI-assisted first response to
+support questions and indicates when an issue may need a person. The current
+demo displays that recommendation; it does not connect to a human agent.
 
 The Alpha release integrates a React and TypeScript customer interface with a FastAPI backend. The backend manages conversations and messages, communicates with an external AI provider, and uses PostgreSQL for application data.
 
@@ -101,8 +103,8 @@ Customer-Service-Platform/
 
 Before running the application locally, install:
 
-- Python 3
-- Node.js and npm
+- Python 3.12, as used by backend CI
+- Node.js 22 and npm, as used by frontend CI
 - PostgreSQL
 - Git
 
@@ -269,6 +271,34 @@ A successful response follows this structure:
 }
 ```
 
+### API Contract
+
+FastAPI serves interactive API documentation at `http://localhost:8000/docs`
+and the generated schema at `http://localhost:8000/openapi.json`.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `conversationId` in the path | string | Required; must identify a stored conversation. |
+| `customerId` in the request | string | Required and nonempty; must match that conversation's customer. This is a demo identifier, not authenticated identity. |
+| `message` in the request | string | 1–2,000 characters; the AI service rejects whitespace-only messages. |
+| `conversationId` in the response | string | Must match the requested conversation. |
+| `messageId` in the response | string | ID of the saved assistant message. |
+| `response` | string | Assistant text, including a fallback if the provider is unavailable. |
+| `source` | string | Currently `AI` from this endpoint; the frontend also accepts `HUMAN`. |
+| `confidence` | number | 0–1; a preset demo score, not measured answer accuracy. |
+| `escalated` | boolean | Indicates recommended human review; does not confirm a ticket or assignment. |
+
+The endpoint returns `400` for request validation, `403` for a mismatched
+customer ID, and `404` for a missing conversation. Provider failures currently
+return `200` with fallback text, confidence `0.0`, and `escalated: true`.
+The frontend also handles `401`, `429`, and `503` if infrastructure returns them;
+the current backend does not implement authentication or rate limiting.
+
+Customer and assistant messages are committed separately. A failure after the
+first write may leave a customer message stored without its reply. Neither the
+input remaining in the browser nor a timeout proves that the server saved
+nothing. The API has no idempotency key or history-reconciliation endpoint yet.
+
 ## Frontend Setup
 
 Move into the frontend directory:
@@ -280,13 +310,13 @@ cd frontend
 Install dependencies:
 
 ```bash
-npm install
+npm ci
 ```
 
 If PowerShell blocks `npm.ps1`, use:
 
 ```powershell
-npm.cmd install
+npm.cmd ci
 ```
 
 Start the Vite development server:
@@ -427,6 +457,11 @@ Backend tests cover areas including:
 
 Some database unit tests use an in-memory SQLite database so that automated tests do not require a running PostgreSQL instance.
 
+To include the PostgreSQL integration test, point `TEST_DATABASE_URL` at a
+separate test database. That test creates tables and writes temporary rows,
+then removes its own rows. Backend CI uses its own
+PostgreSQL service and passed all 34 tests for application commit `dee9bff`.
+
 ### Frontend Validation
 
 From the `frontend` directory, run:
@@ -451,6 +486,27 @@ a 100 KiB budget and 3,195 bytes (3.12 KiB) of CSS against a 25 KiB budget.
 See [the frontend guide](frontend/README.md) for customer workflows, recovery
 behavior, and the boundary between live API functionality and local demo data.
 
+### Local API Measurement
+
+From the repository root, using the backend environment:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\benchmark_api.py
+```
+
+This script exercises the FastAPI handler and real message persistence in an
+isolated in-memory SQLite database. It replaces the external AI response with
+a fixed test answer. It never connects to your configured application database.
+After five warm-up requests, it measures 50 sequential requests at concurrency
+one and checks that both messages from every request were stored.
+
+On October 1, 2026, Windows with Python 3.12.14 produced 50/50 successful measured
+requests, a 4.55 ms median, and a 5.71 ms 95th percentile. Including warm-ups,
+110 message rows were stored. Repeat runs will vary with the machine and load.
+These figures exclude browser rendering, HTTP network transport, PostgreSQL,
+and live AI provider latency. They are a local handler baseline, not a capacity
+claim or a measure of end-user waiting time.
+
 ## CI/CD
 
 GitHub Actions is used to automatically validate project changes.
@@ -469,6 +525,30 @@ The current CI process includes:
 Pull requests should have successful CI checks before they are merged into `main`.
 
 Feature branches are reviewed through pull requests before their completed work is incorporated into the main branch.
+
+For the evaluated application commit `dee9bff`, the successful workflow records
+are [Frontend CI](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/actions/runs/36818819775)
+and [Backend Database Tests](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/actions/runs/36818819768).
+The frontend run includes coverage and build artifacts. Those files document a
+successful build; they do not establish that the application is deployed.
+
+### Deployment Requirements
+
+For a separate frontend host, agree on the actual origin and configure an
+explicit backend CORS allowlist. The current allowlist supports only the local
+Vite origins. A same-origin `/api` reverse proxy is another option. Setting
+`VITE_API_BASE_URL` alone does not make cross-origin requests work.
+
+The frontend's request timeout is 20 seconds; the AI provider timeout is 30
+seconds. The team still needs to coordinate these budgets and the behavior of
+ambiguous retries. These items are tracked in
+[issue 12](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/12)
+and [issue 13](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/13).
+
+This checkout has no deployment workflow or `/health` endpoint. Deployment
+verification needs a real running environment, evidence of a successful support
+request, and a documented rollback. Add deployment screenshots from that
+environment when the team prepares its final portfolio.
 
 ## Development Workflow
 
