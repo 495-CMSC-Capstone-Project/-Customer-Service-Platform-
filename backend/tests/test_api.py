@@ -481,3 +481,101 @@ def test_health_endpoint_returns_status(monkeypatch):
     assert data["applicationDatabase"] == "AVAILABLE"
     assert data["aiProvider"] == "CONFIGURED"
     assert data["timestamp"]
+
+
+def test_create_escalation_endpoint_returns_not_found(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: None,
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_missing",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_create_escalation_endpoint_returns_forbidden(monkeypatch):
+    conversation = SimpleNamespace(
+        conversation_id="conv_001",
+        customer_id="cust_other",
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    def fake_validate(conversation, customer_id):
+        raise PermissionError(
+            "Customer does not have access to this conversation"
+        )
+
+    monkeypatch.setattr(
+        "backend.app.api.validate_conversation_customer",
+        fake_validate,
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_escalation_endpoint_rejects_invalid_request():
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_feedback_endpoint_returns_not_found(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: None,
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_missing/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "ACCOUNT_ACCESS",
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_feedback_endpoint_rejects_invalid_request():
+    response = client.post(
+        "/api/v1/conversations/conv_001/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "",
+        },
+    )
+
+    assert response.status_code == 400
