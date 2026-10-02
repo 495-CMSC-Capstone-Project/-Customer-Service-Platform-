@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { messageForStatus, sendCustomerMessage } from "./conversations";
+import { ResolutionType } from "../types/support";
+import {
+  messageForStatus,
+  sendCustomerMessage,
+  submitConversationFeedback,
+} from "./conversations";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -139,6 +144,128 @@ describe("sendCustomerMessage", () => {
     });
     const result = expect(request).rejects.toThrow(
       "The support API took too long to respond. The request may have reached the server; retry only if needed.",
+    );
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    await result;
+  });
+});
+
+describe("submitConversationFeedback", () => {
+  it("returns a validated feedback response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        feedbackId: "fb_101",
+        status: "RECORDED",
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      submitConversationFeedback("conv_001", {
+        resolutionType: ResolutionType.AI_RESOLVED,
+        successful: true,
+        category: "ACCOUNT_ACCESS",
+      }),
+    ).resolves.toEqual({
+      feedbackId: "fb_101",
+      status: "RECORDED",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/conv_001/feedback",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resolutionType: ResolutionType.AI_RESOLVED,
+          successful: true,
+          category: "ACCOUNT_ACCESS",
+        }),
+      }),
+    );
+  });
+
+  it("reports duplicate feedback for a 409 response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 409 })),
+    );
+
+    await expect(
+      submitConversationFeedback("conv_001", {
+        resolutionType: ResolutionType.AI_RESOLVED,
+        successful: true,
+        category: "GENERAL",
+      }),
+    ).rejects.toThrow(
+      "Feedback has already been recorded for this conversation.",
+    );
+  });
+
+  it("rejects a malformed feedback response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          status: "RECORDED",
+        }),
+      ),
+    );
+
+    await expect(
+      submitConversationFeedback("conv_001", {
+        resolutionType: ResolutionType.AI_RESOLVED,
+        successful: true,
+        category: "GENERAL",
+      }),
+    ).rejects.toThrow(
+      "The support API returned an invalid response. Please try again.",
+    );
+  });
+
+  it("reports a feedback network failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("offline")),
+    );
+
+    await expect(
+      submitConversationFeedback("conv_001", {
+        resolutionType: ResolutionType.AI_RESOLVED,
+        successful: false,
+        category: "GENERAL",
+      }),
+    ).rejects.toThrow(
+      "Unable to reach the support API. Check your connection and try again.",
+    );
+  });
+
+  it("stops waiting when feedback submission times out", async () => {
+    vi.useFakeTimers();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, options: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          options.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Request aborted", "AbortError"));
+          });
+        });
+      }),
+    );
+
+    const request = submitConversationFeedback("conv_001", {
+      resolutionType: ResolutionType.AI_RESOLVED,
+      successful: true,
+      category: "GENERAL",
+    });
+
+    const result = expect(request).rejects.toThrow(
+      "The support API took too long to respond. The feedback may have reached the server; retry only if needed.",
     );
 
     await vi.advanceTimersByTimeAsync(20_000);
