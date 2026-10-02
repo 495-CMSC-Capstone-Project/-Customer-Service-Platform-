@@ -45,6 +45,11 @@ def setup_conversation_mocks(monkeypatch, customer_id="cust_001"):
         ),
     )
 
+    monkeypatch.setattr(
+        "backend.app.api.ensure_ai_escalation",
+        lambda db, conversation, category, customer_message: None,
+    )
+
 
 def test_chat_endpoint_returns_ai_response(monkeypatch):
     setup_conversation_mocks(monkeypatch)
@@ -268,6 +273,308 @@ def test_chat_endpoint_rejects_blank_customer_id():
         json={
             "customerId": "",
             "message": "Hello",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_chat_endpoint_creates_backend_escalation(monkeypatch):
+    setup_conversation_mocks(monkeypatch)
+    calls = []
+
+    monkeypatch.setattr(
+        "backend.app.api.process_message",
+        lambda customer_id, conversation_id, message: AIResponse(
+            response_text="I can escalate this conversation to a human agent.",
+            confidence_score=0.95,
+            escalation_required=True,
+            category="escalation",
+        ),
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.ensure_ai_escalation",
+        lambda db, conversation, category, customer_message: calls.append(
+            (conversation.conversation_id, category, customer_message)
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/messages",
+        json={
+            "customerId": "cust_001",
+            "message": "I want a human representative.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls == [
+        ("conv_001", "escalation", "I want a human representative.")
+    ]
+
+
+def test_create_escalation_endpoint_returns_ticket(monkeypatch):
+    conversation = SimpleNamespace(
+        conversation_id="conv_001",
+        customer_id="cust_001",
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.validate_conversation_customer",
+        lambda conversation, customer_id: None,
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.create_escalation",
+        lambda **kwargs: SimpleNamespace(
+            ticket_id="ticket_001",
+            status=SimpleNamespace(value="OPEN"),
+            assigned_queue="General Support",
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "ticketId": "ticket_001",
+        "status": "OPEN",
+        "assignedQueue": "General Support",
+    }
+
+
+def test_create_escalation_endpoint_returns_conflict(monkeypatch):
+    from backend.app.escalation_service import ActiveEscalationExistsError
+
+    conversation = SimpleNamespace(
+        conversation_id="conv_001",
+        customer_id="cust_001",
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.validate_conversation_customer",
+        lambda conversation, customer_id: None,
+    )
+
+    def fake_create_escalation(**kwargs):
+        raise ActiveEscalationExistsError(
+            "An active escalation already exists for this conversation"
+        )
+
+    monkeypatch.setattr(
+        "backend.app.api.create_escalation",
+        fake_create_escalation,
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_feedback_endpoint_records_feedback(monkeypatch):
+    conversation = SimpleNamespace(conversation_id="conv_001")
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.record_feedback",
+        lambda **kwargs: SimpleNamespace(feedback_id="fb_001"),
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "ACCOUNT_ACCESS",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "feedbackId": "fb_001",
+        "status": "RECORDED",
+    }
+
+
+def test_feedback_endpoint_returns_conflict(monkeypatch):
+    from backend.app.feedback_service import DuplicateFeedbackError
+
+    conversation = SimpleNamespace(conversation_id="conv_001")
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    def fake_record_feedback(**kwargs):
+        raise DuplicateFeedbackError(
+            "Feedback already exists for this conversation"
+        )
+
+    monkeypatch.setattr(
+        "backend.app.api.record_feedback",
+        fake_record_feedback,
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "ACCOUNT_ACCESS",
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_health_endpoint_returns_status(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.check_health",
+        lambda db: SimpleNamespace(
+            status="HEALTHY",
+            api="AVAILABLE",
+            application_database="AVAILABLE",
+            ai_provider="CONFIGURED",
+        ),
+    )
+
+    response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["status"] == "HEALTHY"
+    assert data["api"] == "AVAILABLE"
+    assert data["applicationDatabase"] == "AVAILABLE"
+    assert data["aiProvider"] == "CONFIGURED"
+    assert data["timestamp"]
+
+
+def test_create_escalation_endpoint_returns_not_found(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: None,
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_missing",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_create_escalation_endpoint_returns_forbidden(monkeypatch):
+    conversation = SimpleNamespace(
+        conversation_id="conv_001",
+        customer_id="cust_other",
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    def fake_validate(conversation, customer_id):
+        raise PermissionError(
+            "Customer does not have access to this conversation"
+        )
+
+    monkeypatch.setattr(
+        "backend.app.api.validate_conversation_customer",
+        fake_validate,
+    )
+
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "Customer requested human assistance.",
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_escalation_endpoint_rejects_invalid_request():
+    response = client.post(
+        "/api/v1/escalations",
+        json={
+            "conversationId": "conv_001",
+            "customerId": "cust_001",
+            "reason": "CUSTOMER_REQUEST",
+            "summary": "",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_feedback_endpoint_returns_not_found(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: None,
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_missing/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "ACCOUNT_ACCESS",
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_feedback_endpoint_rejects_invalid_request():
+    response = client.post(
+        "/api/v1/conversations/conv_001/feedback",
+        json={
+            "resolutionType": "AI_RESOLVED",
+            "successful": True,
+            "category": "",
         },
     )
 

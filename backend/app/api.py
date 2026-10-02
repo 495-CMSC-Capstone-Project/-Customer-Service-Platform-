@@ -1,4 +1,6 @@
-from fastapi import Depends, FastAPI, HTTPException, Path
+from datetime import datetime, timezone
+
+from fastapi import Depends, FastAPI, HTTPException, Path, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,6 +15,17 @@ from backend.app.conversation_service import (
     validate_conversation_customer,
 )
 from backend.app.database import get_db
+from backend.app.escalation_service import (
+    ActiveEscalationExistsError,
+    create_escalation,
+    ensure_ai_escalation,
+)
+from backend.app.feedback_service import (
+    DuplicateFeedbackError,
+    record_feedback,
+)
+from backend.app.health_service import check_health
+from backend.app.models import EscalationReason, ResolutionType
 
 
 app = FastAPI(title="Customer Service Platform API")
@@ -41,6 +54,38 @@ class ChatResponse(BaseModel):
     source: str
     confidence: float = Field(ge=0.0, le=1.0)
     escalated: bool
+
+
+class EscalationRequest(BaseModel):
+    conversationId: str = Field(min_length=1)
+    customerId: str = Field(min_length=1)
+    reason: EscalationReason
+    summary: str = Field(min_length=1, max_length=1000)
+
+
+class EscalationResponse(BaseModel):
+    ticketId: str
+    status: str
+    assignedQueue: str
+
+
+class FeedbackRequest(BaseModel):
+    resolutionType: ResolutionType
+    successful: bool
+    category: str = Field(min_length=1, max_length=100)
+
+
+class FeedbackResponse(BaseModel):
+    feedbackId: str
+    status: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    api: str
+    applicationDatabase: str
+    aiProvider: str
+    timestamp: str
 
 
 @app.exception_handler(RequestValidationError)
@@ -112,6 +157,14 @@ def chat(
         result.confidence_score,
     )
 
+    if result.escalation_required:
+        ensure_ai_escalation(
+            db=db,
+            conversation=conversation,
+            category=result.category,
+            customer_message=request.message,
+        )
+
     return ChatResponse(
         conversationId=conversationId,
         messageId=ai_message.message_id,
@@ -119,4 +172,118 @@ def chat(
         source="AI",
         confidence=result.confidence_score,
         escalated=result.escalation_required,
+    )
+
+
+@app.post(
+    "/api/v1/escalations",
+    response_model=EscalationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_human_escalation(
+    request: EscalationRequest,
+    db: Session = Depends(get_db),
+) -> EscalationResponse:
+    conversation = get_conversation(db, request.conversationId)
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    try:
+        validate_conversation_customer(
+            conversation,
+            request.customerId,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    try:
+        ticket = create_escalation(
+            db=db,
+            conversation=conversation,
+            reason=request.reason,
+            summary=request.summary,
+        )
+    except ActiveEscalationExistsError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return EscalationResponse(
+        ticketId=ticket.ticket_id,
+        status=ticket.status.value,
+        assignedQueue=ticket.assigned_queue,
+    )
+
+
+@app.post(
+    "/api/v1/conversations/{conversationId}/feedback",
+    response_model=FeedbackResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_feedback(
+    request: FeedbackRequest,
+    conversationId: str = Path(min_length=1),
+    db: Session = Depends(get_db),
+) -> FeedbackResponse:
+    conversation = get_conversation(db, conversationId)
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    try:
+        feedback = record_feedback(
+            db=db,
+            conversation=conversation,
+            resolution_type=request.resolutionType,
+            successful=request.successful,
+            category=request.category,
+        )
+    except DuplicateFeedbackError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return FeedbackResponse(
+        feedbackId=feedback.feedback_id,
+        status="RECORDED",
+    )
+
+
+@app.get(
+    "/api/v1/health",
+    response_model=HealthResponse,
+)
+def health(
+    db: Session = Depends(get_db),
+) -> HealthResponse:
+    result = check_health(db)
+
+    return HealthResponse(
+        status=result.status,
+        api=result.api,
+        applicationDatabase=result.application_database,
+        aiProvider=result.ai_provider,
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
