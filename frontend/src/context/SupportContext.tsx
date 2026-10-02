@@ -6,7 +6,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { sendCustomerMessage } from "../api/conversations";
+import {
+  sendCustomerMessage,
+  submitConversationFeedback,
+} from "../api/conversations";
 import { createSeed, LIVE_CONVERSATION_ID } from "../data/seed";
 import {
   ConversationStatus,
@@ -249,66 +252,94 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     [customerId, updateStore, saveDraft],
   );
 
-  const submitFeedback = useCallback(
-    (
-      conversationId: string,
-      payload: {
-        resolutionType: ResolutionType;
-        successful: boolean;
-        category: string;
-      },
-    ) => {
-      if (!customerId) {
-        throw new Error("You need to sign in first.");
-      }
-      const conversation = storeRef.current.conversations.find(
+const submitFeedback = useCallback(
+  async (
+    conversationId: string,
+    payload: {
+      resolutionType: ResolutionType;
+      successful: boolean;
+      category: string;
+    },
+  ): Promise<Feedback> => {
+    if (!customerId) {
+      throw new Error("You need to sign in first.");
+    }
+
+    const conversation = storeRef.current.conversations.find(
+      (item) => item.conversationId === conversationId,
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation cannot be found.");
+    }
+
+    if (conversation.customerId !== customerId) {
+      throw new Error("You do not have access to this conversation.");
+    }
+
+    if (pendingRequest.current) {
+      throw new Error("Wait for the current reply before leaving feedback.");
+    }
+
+    if (
+      storeRef.current.feedback.some(
         (item) => item.conversationId === conversationId,
+      )
+    ) {
+      throw new Error(
+        "Feedback has already been recorded for this conversation.",
       );
-      if (!conversation) {
-        throw new Error("Conversation cannot be found.");
-      }
-      if (conversation.customerId !== customerId) {
-        throw new Error("You do not have access to this conversation.");
-      }
-      if (pendingRequest.current) throw new Error("Wait for the current reply before leaving feedback.");
-      if (storeRef.current.feedback.some((item) => item.conversationId === conversationId)) {
-        throw new Error("Feedback has already been recorded for this conversation.");
-      }
-      if (!payload.category.trim()) {
-        throw new Error("Choose a support category.");
-      }
+    }
 
-      const now = new Date().toISOString();
-      const feedback: Feedback = {
-        feedbackId: createId("fb"),
+    if (!payload.category.trim()) {
+      throw new Error("Choose a support category.");
+    }
+
+    const now = new Date().toISOString();
+    let feedbackId: string;
+
+    if (conversationId === LIVE_CONVERSATION_ID) {
+      const result = await submitConversationFeedback(
         conversationId,
-        resolutionType: payload.resolutionType,
-        successful: payload.successful,
-        category: payload.category,
-        createdAt: now,
-      };
+        payload,
+      );
 
-      updateStore((current) => ({
-        ...current,
-        feedback: [...current.feedback, feedback],
-        conversations: current.conversations.map((item) =>
-          item.conversationId === conversationId
-            ? {
-                ...item,
-                // Feedback is local only; it cannot close a live server conversation.
-                status: payload.successful && conversationId !== LIVE_CONVERSATION_ID
+      feedbackId = result.feedbackId;
+    } else {
+      feedbackId = createId("fb");
+    }
+
+    const feedback: Feedback = {
+      feedbackId,
+      conversationId,
+      resolutionType: payload.resolutionType,
+      successful: payload.successful,
+      category: payload.category,
+      createdAt: now,
+    };
+
+    updateStore((current) => ({
+      ...current,
+      feedback: [...current.feedback, feedback],
+      conversations: current.conversations.map((item) =>
+        item.conversationId === conversationId
+          ? {
+              ...item,
+              status:
+                payload.successful &&
+                conversationId !== LIVE_CONVERSATION_ID
                   ? ConversationStatus.RESOLVED
                   : item.status,
-                updatedAt: now,
-              }
-            : item,
-        ),
-      }));
+              updatedAt: now,
+            }
+          : item,
+      ),
+    }));
 
-      return feedback;
-    },
-    [customerId, updateStore],
-  );
+    return feedback;
+  },
+  [customerId, updateStore],
+);
 
   const getMessages = useCallback(
     (conversationId: string) => {
