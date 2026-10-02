@@ -36,7 +36,7 @@ export interface SupportContextValue {
       successful: boolean;
       category: string;
     },
-  ) => Feedback;
+  ) => Promise<Feedback>;
   getMessages: (conversationId: string) => Message[];
   getTicket: (conversationId: string) => Ticket | undefined;
   getFeedback: (conversationId: string) => Feedback | undefined;
