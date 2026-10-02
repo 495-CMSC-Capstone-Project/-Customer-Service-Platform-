@@ -5,6 +5,7 @@ import { StatusBadge } from "../components/common/StatusBadge";
 import { ErrorMessage } from "../components/common/ErrorMessage";
 import { useAuth } from "../context/auth";
 import { useSupport } from "../context/support";
+import { LIVE_CONVERSATION_ID } from "../data/seed";
 import { ResolutionType } from "../types/support";
 import { formatCategory, formatDateTime } from "../utils/format";
 
@@ -57,8 +58,8 @@ export function FeedbackPage() {
       </p>
       <h1>Resolution feedback</h1>
       <p className="page__lede">
-        Tell us whether the support helped. This demo saves feedback in this
-        browser only; it does not send it to an agent or close a server conversation.
+        Tell us whether the support helped. Feedback for the live support conversation
+        is recorded by the backend. Sample conversations remain browser-only demonstrations.
       </p>
       {storageWarning ? <p className="error-message" role="status">{storageWarning}</p> : null}
 
@@ -66,7 +67,11 @@ export function FeedbackPage() {
         <div className="auth-card">
           {justSubmitted ? (
             <p className="notice notice--success" role="status">
-              {storageWarning ? "Feedback recorded for this page only." : "Feedback saved in this browser."}
+              {conversation.conversationId === LIVE_CONVERSATION_ID
+                ? "Feedback recorded successfully."
+                : storageWarning
+                  ? "Feedback recorded for this page only."
+                  : "Feedback saved in this browser."}
             </p>
           ) : null}
           <p>
@@ -89,10 +94,15 @@ export function FeedbackPage() {
           <ErrorMessage message={error} />
           <FeedbackForm
             defaultResolutionType={defaultResolutionType}
-            onSubmit={(payload) => {
+            onSubmit={async (payload) => {
               setError(null);
+              
               try {
-                submitFeedback(conversation.conversationId, payload);
+                await submitFeedback(
+                  conversation.conversationId,
+                  payload,
+                );
+                  
                 setJustSubmitted(true);
               } catch (cause) {
                 setError(
@@ -100,6 +110,8 @@ export function FeedbackPage() {
                     ? cause.message
                     : "Unable to record feedback.",
                 );
+
+                throw cause;
               }
             }}
           />
