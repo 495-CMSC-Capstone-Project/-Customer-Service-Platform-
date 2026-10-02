@@ -28,7 +28,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <span>{label}</span>
         {source ? <span>Source: {source}</span> : null}
         {typeof message.confidence === "number" ? (
-          <span>{formatConfidence(message.confidence)}</span>
+          <span title="This demo returns a preset score, not a measured probability that the answer is correct.">{formatConfidence(message.confidence)} · demo score</span>
         ) : null}
         <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
       </p>

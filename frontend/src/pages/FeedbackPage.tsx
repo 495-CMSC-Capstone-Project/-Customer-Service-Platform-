@@ -3,15 +3,15 @@ import { Link, useParams } from "react-router-dom";
 import { FeedbackForm } from "../components/feedback/FeedbackForm";
 import { StatusBadge } from "../components/common/StatusBadge";
 import { ErrorMessage } from "../components/common/ErrorMessage";
-import { useAuth } from "../context/AuthContext";
-import { useSupport } from "../context/SupportContext";
-import { ConversationStatus, ResolutionType } from "../types/support";
+import { useAuth } from "../context/auth";
+import { useSupport } from "../context/support";
+import { ResolutionType } from "../types/support";
 import { formatCategory, formatDateTime } from "../utils/format";
 
 export function FeedbackPage() {
   const { conversationId } = useParams();
   const { customerId } = useAuth();
-  const { store, getFeedback, getTicket, submitFeedback } = useSupport();
+  const { store, storageWarning, sendingConversationId, getFeedback, getMessages, submitFeedback } = useSupport();
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +19,6 @@ export function FeedbackPage() {
     (item) => item.conversationId === conversationId,
   );
   const existing = conversationId ? getFeedback(conversationId) : undefined;
-  const ticket = conversationId ? getTicket(conversationId) : undefined;
 
   if (!conversationId || !conversation) {
     return (
@@ -45,7 +44,7 @@ export function FeedbackPage() {
 
   const recorded = existing;
   const defaultResolutionType =
-    conversation.status === ConversationStatus.ESCALATED || ticket
+    getMessages(conversationId).some((message) => message.senderType === "HUMAN")
       ? ResolutionType.HUMAN_RESOLVED
       : ResolutionType.AI_RESOLVED;
 
@@ -58,20 +57,21 @@ export function FeedbackPage() {
       </p>
       <h1>Resolution feedback</h1>
       <p className="page__lede">
-        Record whether this issue was handled by the AI assistant or a human
-        agent so the prototype can keep an outcome on the conversation.
+        Tell us whether the support helped. This demo saves feedback in this
+        browser only; it does not send it to an agent or close a server conversation.
       </p>
+      {storageWarning ? <p className="error-message" role="status">{storageWarning}</p> : null}
 
       {recorded ? (
         <div className="auth-card">
           {justSubmitted ? (
             <p className="notice notice--success" role="status">
-              Feedback recorded.
+              {storageWarning ? "Feedback recorded for this page only." : "Feedback saved in this browser."}
             </p>
           ) : null}
           <p>
             <strong>{recorded.feedbackId}</strong> ·{" "}
-            {formatCategory(recorded.resolutionType)}
+            {recorded.resolutionType === ResolutionType.HUMAN_RESOLVED ? "Human support" : "AI support"}
           </p>
           <p>
             Successful: {recorded.successful ? "Yes" : "No"} · Category:{" "}
@@ -82,6 +82,8 @@ export function FeedbackPage() {
           </p>
           <StatusBadge status={conversation.status} />
         </div>
+      ) : sendingConversationId === conversationId ? (
+        <p role="status">Wait for the current reply before leaving feedback.</p>
       ) : (
         <div className="auth-card">
           <ErrorMessage message={error} />

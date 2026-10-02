@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { DEMO_CUSTOMER_ID } from "../../data/seed";
 import { ErrorMessage } from "../common/ErrorMessage";
 
@@ -52,6 +52,8 @@ export function SignInForm({
         autoComplete="username"
         placeholder={DEMO_CUSTOMER_ID}
         value={customerId}
+        maxLength={64}
+        required
         onChange={(event) => setCustomerId(event.target.value)}
       />
       <p className="field-hint">

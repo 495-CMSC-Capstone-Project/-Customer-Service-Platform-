@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { useSupport } from "../../context/SupportContext";
+import { useAuth } from "../../context/auth";
+import { useSupport } from "../../context/support";
 import { ErrorMessage } from "../common/ErrorMessage";
 import { createId } from "../../utils/ids";
 
@@ -57,6 +57,7 @@ export function SignUpForm({
         autoComplete="name"
         placeholder="Alex Rivera"
         value={name}
+        required
         onChange={(event) => setName(event.target.value)}
       />
       <label htmlFor={customerInputId}>Customer ID</label>
@@ -66,15 +67,17 @@ export function SignUpForm({
         autoComplete="username"
         placeholder="cust_7832"
         value={customerId}
+        maxLength={64}
+        required
         onChange={(event) => setCustomerId(event.target.value)}
       />
       <p className="field-hint">
-        Choose an ID you can sign back in with. This prototype stores the
-        account in your browser.
+        This profile is saved only in your browser. It does not create a server
+        account or a live support conversation.
       </p>
       <ErrorMessage message={error} />
       <button type="submit" className="button button--primary">
-        Create account
+        Create local profile
       </button>
       {onRequestSignIn ? (
         <p className="modal__switch">

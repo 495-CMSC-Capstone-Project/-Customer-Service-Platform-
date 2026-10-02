@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useAuthModal } from "../context/AuthModalContext";
+import { useAuth } from "../context/auth";
+import { useAuthModal } from "../context/authModal";
 
 const features = [
   {
@@ -9,20 +9,20 @@ const features = [
     body: "Get clear answers to common questions without waiting in a queue.",
   },
   {
-    title: "Talk to a person",
-    body: "If the assistant is unsure or the issue is complex, we escalate to a human agent.",
+    title: "Know when to get more help",
+    body: "The assistant can recommend human review. Agent routing is not connected in this demo.",
   },
   {
     title: "Keep your history",
-    body: "Return to past conversations, see what was resolved, and pick up where you left off.",
+    body: "Revisit messages saved in this browser and browse read-only example conversations.",
   },
 ] as const;
 
 const steps = [
   {
     number: "1",
-    title: "Sign in or sign up",
-    body: "Use your customer account so we can look up the right information.",
+    title: "Open the demo profile",
+    body: "Sign in with cust_001 for live AI support. Other profiles are saved locally and have no server conversation yet.",
   },
   {
     number: "2",
@@ -31,8 +31,8 @@ const steps = [
   },
   {
     number: "3",
-    title: "Get an answer or an agent",
-    body: "We show whether the reply came from AI or a person, and we can open a support ticket when needed.",
+    title: "Review the reply",
+    body: "Read the answer, continue the conversation, and record whether it helped. A human-review recommendation is not a confirmed support ticket.",
   },
 ] as const;
 
@@ -54,10 +54,10 @@ export function HomePage() {
       <section className="hero">
         <div className="hero__content">
           <p className="eyebrow">Customer Service Platform</p>
-          <h1>Get help from an AI assistant, or a real person when you need one.</h1>
+          <h1>Work through your support issue with an AI assistant.</h1>
           <p className="hero__lede">
-            Ask a question, see a clear answer, and know right away if your issue
-            was handled automatically or sent to a human agent.
+            Try the live support demo, review the response, and see when your
+            issue may need help from a person.
           </p>
           <div className="hero__actions">
             {isAuthenticated ? (
@@ -85,8 +85,7 @@ export function HomePage() {
         <h2 id="support-heading">Support that stays easy to follow</h2>
         <p className="section__intro">
           The customer interface is built around a few straightforward steps: ask
-          a question, read the response, and see if a human agent has been
-          brought in.
+          a question, read the response, and decide whether you need more help.
         </p>
         <div className="feature-grid">
           {features.map((feature) => (
@@ -119,14 +118,14 @@ export function HomePage() {
         <h2>Ready to start a conversation?</h2>
         {isAuthenticated ? (
           <>
-            <p>Open your conversation history to continue or start a new request.</p>
+            <p>Return to the live demo or browse your local conversation history.</p>
             <Link to="/conversations" className="button button--primary">
               Go to conversations
             </Link>
           </>
         ) : (
           <>
-            <p>Sign in or create a customer account to reach support.</p>
+            <p>Sign in as cust_001 to try the live AI demo.</p>
             <div className="cta-band__actions">
               <button type="button" className="button button--primary" onClick={openSignIn}>
                 Sign in

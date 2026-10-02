@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { useAuthModal } from "../../context/AuthModalContext";
+import { useAuth } from "../../context/auth";
+import { useAuthModal } from "../../context/authModal";
 
 const sectionLinks = [
   { to: "/#how-it-works", label: "How it works" },
