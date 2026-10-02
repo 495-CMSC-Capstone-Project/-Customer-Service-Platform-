@@ -264,6 +264,15 @@ describe("customer support workflows", () => {
   });
 
   it("requires an explicit feedback outcome and keeps unsuccessful live conversations usable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+        feedbackId: "fb_live_001",
+        status: "RECORDED",
+      }),
+    ),
+  );
     const { user } = openApp("/conversations/conv_001/feedback");
     const outcome = screen.getByRole("combobox", { name: "Was the issue handled successfully?" });
     expect((outcome as HTMLSelectElement).value).toBe("");
@@ -271,8 +280,11 @@ describe("customer support workflows", () => {
     expect(screen.getByRole("alert").textContent).toContain("Choose whether");
     await user.selectOptions(outcome, "false");
     await user.click(screen.getByRole("button", { name: "Submit feedback" }));
-    expect(await screen.findByText("Feedback saved in this browser.")).toBeTruthy();
+    expect(
+      await screen.findByText("Feedback recorded successfully."),
+    ).toBeTruthy();
     expect(screen.getByText(/Successful: No/)).toBeTruthy();
+    expect(screen.getByText(/fb_live_001/)).toBeTruthy();
     expect(JSON.parse(localStorage.getItem(storeKey)!).conversations[0].status).toBe("ACTIVE");
     await user.click(screen.getByRole("link", { name: "Back to conversation" }));
     expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).disabled).toBe(false);
@@ -338,16 +350,46 @@ describe("customer support workflows", () => {
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
   });
 
-  it("does not claim feedback was saved when browser persistence fails", async () => {
-    const { user } = openApp("/conversations/conv_001/feedback");
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Quota exceeded", "QuotaExceededError"); });
-    await user.selectOptions(screen.getByRole("combobox", { name: "Was the issue handled successfully?" }), "true");
-    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
-    expect(await screen.findByText("Feedback recorded for this page only.")).toBeTruthy();
-    expect(screen.queryByText("Feedback saved in this browser.")).toBeNull();
-    const stored = JSON.parse(localStorage.getItem(storeKey)!);
-    expect(stored.feedback.some((item: { conversationId: string }) => item.conversationId === "conv_001")).toBe(false);
+  it("still confirms live feedback when browser persistence fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          feedbackId: "fb_live_002",
+          status: "RECORDED",
+        }),
+      ),
+    );
+
+  const { user } = openApp("/conversations/conv_001/feedback");
+
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("Quota exceeded", "QuotaExceededError");
   });
+
+  await user.selectOptions(
+    screen.getByRole("combobox", {
+      name: "Was the issue handled successfully?",
+    }),
+    "true",
+  );
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Submit feedback",
+    }),
+  );
+
+  expect(
+    await screen.findByText("Feedback recorded successfully."),
+  ).toBeTruthy();
+
+  expect(screen.getByText(/fb_live_002/)).toBeTruthy();
+
+  expect(
+    screen.queryByText("Feedback saved in this browser."),
+  ).toBeNull();
+});
 
   it("prevents double sends and feedback while a request is pending", async () => {
     let finish!: (response: Response) => void;
