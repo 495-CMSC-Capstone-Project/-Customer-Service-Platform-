@@ -19,6 +19,7 @@ export interface ConversationDraft {
 export interface SupportContextValue {
   store: PrototypeStore;
   sendingConversationId: string | null;
+  submittingFeedbackConversationId: string | null;
   storageWarning: string | null;
   customerConversations: Conversation[];
   registerCustomer: (customerId: string, name: string) => void;
