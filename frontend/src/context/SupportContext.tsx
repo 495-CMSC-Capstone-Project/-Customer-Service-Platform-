@@ -281,10 +281,14 @@ const submitFeedback = useCallback(
       throw new Error("Wait for the current reply before leaving feedback.");
     }
 
+    const existingFeedback = storeRef.current.feedback.find(
+      (item) => item.conversationId === conversationId,
+    );
+    
     if (
-      storeRef.current.feedback.some(
-        (item) => item.conversationId === conversationId,
-      )
+      existingFeedback &&
+      (conversationId !== LIVE_CONVERSATION_ID ||
+        existingFeedback.backendConfirmed === true)
     ) {
       throw new Error(
         "Feedback has already been recorded for this conversation.",
@@ -316,11 +320,17 @@ const submitFeedback = useCallback(
       successful: payload.successful,
       category: payload.category,
       createdAt: now,
+      backendConfirmed: conversationId === LIVE_CONVERSATION_ID,
     };
 
     updateStore((current) => ({
       ...current,
-      feedback: [...current.feedback, feedback],
+      feedback: [
+        ...current.feedback.filter(
+          (item) => item.conversationId !== conversationId,
+        ),
+        feedback,
+        ],
       conversations: current.conversations.map((item) =>
         item.conversationId === conversationId
           ? {
@@ -370,7 +380,12 @@ const submitFeedback = useCallback(
 
   const getFeedback = useCallback(
     (conversationId: string) => {
-      return store.feedback.find((item) => item.conversationId === conversationId);
+      return store.feedback.find(
+        (item) =>
+          item.conversationId === conversationId &&
+          (conversationId !== LIVE_CONVERSATION_ID ||
+            item.backendConfirmed === true),
+      );
     },
     [store.feedback],
   );
