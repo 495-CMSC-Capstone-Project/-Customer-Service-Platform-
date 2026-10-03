@@ -290,6 +290,67 @@ describe("customer support workflows", () => {
     expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).disabled).toBe(false);
   });
 
+  it("allows backend submission when only legacy local feedback exists", async () => {
+    const seed = createSeed();
+
+    seed.feedback.push({
+      feedbackId: "legacy_local_feedback",
+      conversationId: "conv_001",
+      resolutionType: "AI_RESOLVED",
+      successful: true,
+      category: "GENERAL",
+      createdAt: new Date().toISOString(),
+    });
+
+    localStorage.setItem(storeKey, JSON.stringify(seed));
+  
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          feedbackId: "fb_backend_001",
+          status: "RECORDED",
+        }),
+      ),
+    );
+
+    const { user } = openApp("/conversations/conv_001/feedback");
+  
+    expect(
+      screen.getByRole("button", { name: "Submit feedback" }),
+    ).toBeTruthy();
+  
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Was the issue handled successfully?",
+      }),
+      "true",
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Submit feedback",
+      }),
+    );
+  
+    expect(
+      await screen.findByText("Feedback recorded successfully."),
+    ).toBeTruthy();
+  
+    expect(screen.getByText(/fb_backend_001/)).toBeTruthy();
+  
+    const stored = JSON.parse(localStorage.getItem(storeKey)!);
+  
+    const liveFeedback = stored.feedback.filter(
+      (item: { conversationId: string }) =>
+        item.conversationId === "conv_001",
+    );
+
+    expect(liveFeedback).toHaveLength(1);
+    expect(liveFeedback[0].feedbackId).toBe("fb_backend_001");
+    expect(liveFeedback[0].backendConfirmed).toBe(true);
+  });
+  
   it("does not infer human resolution from an open sample ticket", () => {
     openApp("/conversations/conv_esc_01/feedback");
     expect((screen.getByRole("combobox", { name: "Which support did you use?" }) as HTMLSelectElement).value).toBe("AI_RESOLVED");
