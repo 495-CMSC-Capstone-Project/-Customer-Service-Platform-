@@ -12,7 +12,15 @@ import { formatCategory, formatDateTime } from "../utils/format";
 export function FeedbackPage() {
   const { conversationId } = useParams();
   const { customerId } = useAuth();
-  const { store, storageWarning, sendingConversationId, getFeedback, getMessages, submitFeedback } = useSupport();
+  const {
+    store,
+    storageWarning,
+    sendingConversationId,
+    submittingFeedbackConversationId,
+    getFeedback,
+    getMessages,
+    submitFeedback,
+  } = useSupport();
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +52,8 @@ export function FeedbackPage() {
   }
 
   const recorded = existing;
+  const feedbackSubmitting =
+    submittingFeedbackConversationId === conversationId;
   const defaultResolutionType =
     getMessages(conversationId).some((message) => message.senderType === "HUMAN")
       ? ResolutionType.HUMAN_RESOLVED
@@ -89,6 +99,8 @@ export function FeedbackPage() {
         </div>
       ) : sendingConversationId === conversationId ? (
         <p role="status">Wait for the current reply before leaving feedback.</p>
+      ) : feedbackSubmitting ? (
+        <p role="status">Feedback submission is in progress.</p>
       ) : (
         <div className="auth-card">
           <ErrorMessage message={error} />
