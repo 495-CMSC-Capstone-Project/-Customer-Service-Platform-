@@ -350,6 +350,72 @@ describe("customer support workflows", () => {
     expect(liveFeedback[0].feedbackId).toBe("fb_backend_001");
     expect(liveFeedback[0].backendConfirmed).toBe(true);
   });
+
+  it("prevents a second feedback submission after navigating away and back", async () => {
+    let finish!: (response: Response) => void;
+  
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+    );
+  
+    vi.stubGlobal("fetch", fetchMock);
+  
+    const { user } = openApp("/conversations/conv_001/feedback");
+  
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Was the issue handled successfully?",
+      }),
+      "true",
+    );
+  
+    await user.click(
+      screen.getByRole("button", {
+        name: "Submit feedback",
+      }),
+    );
+  
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  
+    await user.click(
+      screen.getByRole("link", {
+        name: "Back to conversation",
+      }),
+    );
+  
+    await user.click(
+      screen.getByRole("link", {
+        name: "Leave feedback",
+      }),
+    );
+  
+    expect(
+      screen.getByText("Feedback submission is in progress."),
+    ).toBeTruthy();
+  
+    expect(
+      screen.queryByRole("button", {
+        name: "Submit feedback",
+      }),
+    ).toBeNull();
+  
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  
+    await act(async () => {
+      finish(
+        Response.json({
+          feedbackId: "fb_navigation_001",
+          status: "RECORDED",
+        }),
+      );
+    });
+  
+    expect(
+      await screen.findByText(/fb_navigation_001/),
+    ).toBeTruthy();
+  });
   
   it("does not infer human resolution from an open sample ticket", () => {
     openApp("/conversations/conv_esc_01/feedback");
