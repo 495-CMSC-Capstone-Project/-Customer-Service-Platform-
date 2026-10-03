@@ -264,6 +264,15 @@ describe("customer support workflows", () => {
   });
 
   it("requires an explicit feedback outcome and keeps unsuccessful live conversations usable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+        feedbackId: "fb_live_001",
+        status: "RECORDED",
+      }),
+    ),
+  );
     const { user } = openApp("/conversations/conv_001/feedback");
     const outcome = screen.getByRole("combobox", { name: "Was the issue handled successfully?" });
     expect((outcome as HTMLSelectElement).value).toBe("");
@@ -271,13 +280,143 @@ describe("customer support workflows", () => {
     expect(screen.getByRole("alert").textContent).toContain("Choose whether");
     await user.selectOptions(outcome, "false");
     await user.click(screen.getByRole("button", { name: "Submit feedback" }));
-    expect(await screen.findByText("Feedback saved in this browser.")).toBeTruthy();
+    expect(
+      await screen.findByText("Feedback recorded successfully."),
+    ).toBeTruthy();
     expect(screen.getByText(/Successful: No/)).toBeTruthy();
+    expect(screen.getByText(/fb_live_001/)).toBeTruthy();
     expect(JSON.parse(localStorage.getItem(storeKey)!).conversations[0].status).toBe("ACTIVE");
     await user.click(screen.getByRole("link", { name: "Back to conversation" }));
     expect((screen.getByRole("textbox", { name: "Describe the issue" }) as HTMLTextAreaElement).disabled).toBe(false);
   });
 
+  it("allows backend submission when only legacy local feedback exists", async () => {
+    const seed = createSeed();
+
+    seed.feedback.push({
+      feedbackId: "legacy_local_feedback",
+      conversationId: "conv_001",
+      resolutionType: "AI_RESOLVED",
+      successful: true,
+      category: "GENERAL",
+      createdAt: new Date().toISOString(),
+    });
+
+    localStorage.setItem(storeKey, JSON.stringify(seed));
+  
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          feedbackId: "fb_backend_001",
+          status: "RECORDED",
+        }),
+      ),
+    );
+
+    const { user } = openApp("/conversations/conv_001/feedback");
+  
+    expect(
+      screen.getByRole("button", { name: "Submit feedback" }),
+    ).toBeTruthy();
+  
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Was the issue handled successfully?",
+      }),
+      "true",
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Submit feedback",
+      }),
+    );
+  
+    expect(
+      await screen.findByText("Feedback recorded successfully."),
+    ).toBeTruthy();
+  
+    expect(screen.getByText(/fb_backend_001/)).toBeTruthy();
+  
+    const stored = JSON.parse(localStorage.getItem(storeKey)!);
+  
+    const liveFeedback = stored.feedback.filter(
+      (item: { conversationId: string }) =>
+        item.conversationId === "conv_001",
+    );
+
+    expect(liveFeedback).toHaveLength(1);
+    expect(liveFeedback[0].feedbackId).toBe("fb_backend_001");
+    expect(liveFeedback[0].backendConfirmed).toBe(true);
+  });
+
+  it("prevents a second feedback submission after navigating away and back", async () => {
+    let finish!: (response: Response) => void;
+  
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+    );
+  
+    vi.stubGlobal("fetch", fetchMock);
+  
+    const { user } = openApp("/conversations/conv_001/feedback");
+  
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Was the issue handled successfully?",
+      }),
+      "true",
+    );
+  
+    await user.click(
+      screen.getByRole("button", {
+        name: "Submit feedback",
+      }),
+    );
+  
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  
+    await user.click(
+      screen.getByRole("link", {
+        name: "Back to conversation",
+      }),
+    );
+  
+    await user.click(
+      screen.getByRole("link", {
+        name: "Leave feedback",
+      }),
+    );
+  
+    expect(
+      screen.getByText("Feedback submission is in progress."),
+    ).toBeTruthy();
+  
+    expect(
+      screen.queryByRole("button", {
+        name: "Submit feedback",
+      }),
+    ).toBeNull();
+  
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  
+    await act(async () => {
+      finish(
+        Response.json({
+          feedbackId: "fb_navigation_001",
+          status: "RECORDED",
+        }),
+      );
+    });
+  
+    expect(
+      await screen.findByText(/fb_navigation_001/),
+    ).toBeTruthy();
+  });
+  
   it("does not infer human resolution from an open sample ticket", () => {
     openApp("/conversations/conv_esc_01/feedback");
     expect((screen.getByRole("combobox", { name: "Which support did you use?" }) as HTMLSelectElement).value).toBe("AI_RESOLVED");
@@ -338,16 +477,46 @@ describe("customer support workflows", () => {
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
   });
 
-  it("does not claim feedback was saved when browser persistence fails", async () => {
-    const { user } = openApp("/conversations/conv_001/feedback");
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Quota exceeded", "QuotaExceededError"); });
-    await user.selectOptions(screen.getByRole("combobox", { name: "Was the issue handled successfully?" }), "true");
-    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
-    expect(await screen.findByText("Feedback recorded for this page only.")).toBeTruthy();
-    expect(screen.queryByText("Feedback saved in this browser.")).toBeNull();
-    const stored = JSON.parse(localStorage.getItem(storeKey)!);
-    expect(stored.feedback.some((item: { conversationId: string }) => item.conversationId === "conv_001")).toBe(false);
+  it("still confirms live feedback when browser persistence fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          feedbackId: "fb_live_002",
+          status: "RECORDED",
+        }),
+      ),
+    );
+
+  const { user } = openApp("/conversations/conv_001/feedback");
+
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("Quota exceeded", "QuotaExceededError");
   });
+
+  await user.selectOptions(
+    screen.getByRole("combobox", {
+      name: "Was the issue handled successfully?",
+    }),
+    "true",
+  );
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Submit feedback",
+    }),
+  );
+
+  expect(
+    await screen.findByText("Feedback recorded successfully."),
+  ).toBeTruthy();
+
+  expect(screen.getByText(/fb_live_002/)).toBeTruthy();
+
+  expect(
+    screen.queryByText("Feedback saved in this browser."),
+  ).toBeNull();
+});
 
   it("prevents double sends and feedback while a request is pending", async () => {
     let finish!: (response: Response) => void;

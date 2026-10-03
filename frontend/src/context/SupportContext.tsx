@@ -6,7 +6,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { sendCustomerMessage } from "../api/conversations";
+import {
+  sendCustomerMessage,
+  submitConversationFeedback,
+} from "../api/conversations";
 import { createSeed, LIVE_CONVERSATION_ID } from "../data/seed";
 import {
   ConversationStatus,
@@ -67,8 +70,15 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   const [sendingConversationId, setSendingConversationId] = useState<
     string | null
   >(null);
+
+  const [
+    submittingFeedbackConversationId,
+    setSubmittingFeedbackConversationId,
+  ] = useState<string | null>(null);
+  
   const storeRef = useRef(store);
   const pendingRequest = useRef(false);
+  const pendingFeedbackRequest = useRef(false);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   // Keep drafts beside the request state so route changes do not reset them.
   const [draftState, setDraftState] = useState(loadDrafts);
@@ -249,66 +259,116 @@ export function SupportProvider({ children }: { children: ReactNode }) {
     [customerId, updateStore, saveDraft],
   );
 
-  const submitFeedback = useCallback(
-    (
-      conversationId: string,
-      payload: {
-        resolutionType: ResolutionType;
-        successful: boolean;
-        category: string;
-      },
-    ) => {
-      if (!customerId) {
-        throw new Error("You need to sign in first.");
-      }
-      const conversation = storeRef.current.conversations.find(
-        (item) => item.conversationId === conversationId,
+const submitFeedback = useCallback(
+  async (
+    conversationId: string,
+    payload: {
+      resolutionType: ResolutionType;
+      successful: boolean;
+      category: string;
+    },
+  ): Promise<Feedback> => {
+    if (!customerId) {
+      throw new Error("You need to sign in first.");
+    }
+
+    const conversation = storeRef.current.conversations.find(
+      (item) => item.conversationId === conversationId,
+    );
+
+    if (!conversation) {
+      throw new Error("Conversation cannot be found.");
+    }
+
+    if (conversation.customerId !== customerId) {
+      throw new Error("You do not have access to this conversation.");
+    }
+
+    if (pendingRequest.current) {
+      throw new Error("Wait for the current reply before leaving feedback.");
+    }
+
+    if (pendingFeedbackRequest.current) {
+      throw new Error("Feedback submission is already in progress.");
+    }
+
+    const existingFeedback = storeRef.current.feedback.find(
+      (item) => item.conversationId === conversationId,
+    );
+    
+    if (
+      existingFeedback &&
+      (conversationId !== LIVE_CONVERSATION_ID ||
+        existingFeedback.backendConfirmed === true)
+    ) {
+      throw new Error(
+        "Feedback has already been recorded for this conversation.",
       );
-      if (!conversation) {
-        throw new Error("Conversation cannot be found.");
-      }
-      if (conversation.customerId !== customerId) {
-        throw new Error("You do not have access to this conversation.");
-      }
-      if (pendingRequest.current) throw new Error("Wait for the current reply before leaving feedback.");
-      if (storeRef.current.feedback.some((item) => item.conversationId === conversationId)) {
-        throw new Error("Feedback has already been recorded for this conversation.");
-      }
-      if (!payload.category.trim()) {
-        throw new Error("Choose a support category.");
-      }
+    }
 
-      const now = new Date().toISOString();
-      const feedback: Feedback = {
-        feedbackId: createId("fb"),
+    if (!payload.category.trim()) {
+      throw new Error("Choose a support category.");
+    }
+
+  pendingFeedbackRequest.current = true;
+  setSubmittingFeedbackConversationId(conversationId);
+
+  try {
+    const now = new Date().toISOString();
+    let feedbackId: string;
+
+    if (conversationId === LIVE_CONVERSATION_ID) {
+      const result = await submitConversationFeedback(
         conversationId,
-        resolutionType: payload.resolutionType,
-        successful: payload.successful,
-        category: payload.category,
-        createdAt: now,
-      };
+        payload,
+      );
 
-      updateStore((current) => ({
-        ...current,
-        feedback: [...current.feedback, feedback],
-        conversations: current.conversations.map((item) =>
-          item.conversationId === conversationId
-            ? {
-                ...item,
-                // Feedback is local only; it cannot close a live server conversation.
-                status: payload.successful && conversationId !== LIVE_CONVERSATION_ID
+      feedbackId = result.feedbackId;
+    } else {
+      feedbackId = createId("fb");
+    }
+
+    const feedback: Feedback = {
+      feedbackId,
+      conversationId,
+      resolutionType: payload.resolutionType,
+      successful: payload.successful,
+      category: payload.category,
+      createdAt: now,
+      backendConfirmed: conversationId === LIVE_CONVERSATION_ID,
+    };
+
+    updateStore((current) => ({
+      ...current,
+      feedback: [
+        ...current.feedback.filter(
+          (item) => item.conversationId !== conversationId,
+        ),
+        feedback,
+      ],
+      conversations: current.conversations.map((item) =>
+        item.conversationId === conversationId
+          ? {
+              ...item,
+              status:
+                payload.successful &&
+                conversationId !== LIVE_CONVERSATION_ID
                   ? ConversationStatus.RESOLVED
                   : item.status,
-                updatedAt: now,
-              }
-            : item,
-        ),
-      }));
+              updatedAt: now,
+            }
+          : item,
+      ),
+    }));
 
-      return feedback;
-    },
-    [customerId, updateStore],
-  );
+    return feedback;
+    } finally {
+      pendingFeedbackRequest.current = false;
+      setSubmittingFeedbackConversationId(null);
+    }
+  },
+  [customerId, updateStore],
+);
 
   const getMessages = useCallback(
     (conversationId: string) => {
@@ -339,7 +399,12 @@ export function SupportProvider({ children }: { children: ReactNode }) {
 
   const getFeedback = useCallback(
     (conversationId: string) => {
-      return store.feedback.find((item) => item.conversationId === conversationId);
+      return store.feedback.find(
+        (item) =>
+          item.conversationId === conversationId &&
+          (conversationId !== LIVE_CONVERSATION_ID ||
+            item.backendConfirmed === true),
+      );
     },
     [store.feedback],
   );
@@ -362,6 +427,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       store,
       storageWarning,
       sendingConversationId,
+      submittingFeedbackConversationId,
       customerConversations,
       registerCustomer,
       createConversation,
@@ -378,6 +444,7 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       store,
       storageWarning,
       sendingConversationId,
+      submittingFeedbackConversationId,
       customerConversations,
       registerCustomer,
       createConversation,

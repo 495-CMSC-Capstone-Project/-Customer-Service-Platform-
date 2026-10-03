@@ -12,7 +12,7 @@ interface FeedbackFormProps {
     resolutionType: ResolutionTypeValue;
     successful: boolean;
     category: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export function FeedbackForm({
@@ -24,26 +24,33 @@ export function FeedbackForm({
   const [successful, setSuccessful] = useState("");
   const [category, setCategory] = useState<string>(FeedbackCategory.GENERAL);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    
     if (!successful) {
       setError("Choose whether your issue was resolved.");
       return;
     }
+    
     try {
-      onSubmit({
+      setSubmitting(true);
+
+      await onSubmit({
         resolutionType,
         successful: successful === "true",
         category,
       });
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Unable to record feedback.",
-      );
-    }
+  } catch (cause) {
+    setError(
+      cause instanceof Error ? cause.message : "Unable to record feedback.",
+    );
+  } finally {
+    setSubmitting(false);
   }
+}
 
   return (
     <form className="feedback-form" onSubmit={handleSubmit}>
@@ -85,9 +92,14 @@ export function FeedbackForm({
       </select>
 
       <ErrorMessage message={error} />
-      <button type="submit" className="button button--primary">
-        Submit feedback
-      </button>
+      
+       <button
+         type="submit"
+         className="button button--primary"
+         disabled={submitting}
+       >
+         {submitting ? "Submitting..." : "Submit feedback"}
+       </button>
     </form>
   );
 }
