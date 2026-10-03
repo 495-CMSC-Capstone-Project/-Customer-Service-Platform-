@@ -101,6 +101,7 @@ export interface Feedback {
   successful: boolean;
   category: string;
   createdAt: string;
+  backendConfirmed?: boolean;
 }
 
 export interface PrototypeStore {
