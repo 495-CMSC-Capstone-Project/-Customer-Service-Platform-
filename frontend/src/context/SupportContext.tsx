@@ -70,8 +70,15 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   const [sendingConversationId, setSendingConversationId] = useState<
     string | null
   >(null);
+
+  const [
+    submittingFeedbackConversationId,
+    setSubmittingFeedbackConversationId,
+  ] = useState<string | null>(null);
+  
   const storeRef = useRef(store);
   const pendingRequest = useRef(false);
+  const pendingFeedbackRequest = useRef(false);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   // Keep drafts beside the request state so route changes do not reset them.
   const [draftState, setDraftState] = useState(loadDrafts);
@@ -281,6 +288,10 @@ const submitFeedback = useCallback(
       throw new Error("Wait for the current reply before leaving feedback.");
     }
 
+    if (pendingFeedbackRequest.current) {
+      throw new Error("Feedback submission is already in progress.");
+    }
+
     const existingFeedback = storeRef.current.feedback.find(
       (item) => item.conversationId === conversationId,
     );
@@ -299,6 +310,10 @@ const submitFeedback = useCallback(
       throw new Error("Choose a support category.");
     }
 
+  pendingFeedbackRequest.current = true;
+  setSubmittingFeedbackConversationId(conversationId);
+
+  try {
     const now = new Date().toISOString();
     let feedbackId: string;
 
@@ -330,7 +345,7 @@ const submitFeedback = useCallback(
           (item) => item.conversationId !== conversationId,
         ),
         feedback,
-        ],
+      ],
       conversations: current.conversations.map((item) =>
         item.conversationId === conversationId
           ? {
@@ -347,6 +362,10 @@ const submitFeedback = useCallback(
     }));
 
     return feedback;
+    } finally {
+      pendingFeedbackRequest.current = false;
+      setSubmittingFeedbackConversationId(null);
+    }
   },
   [customerId, updateStore],
 );
@@ -408,6 +427,7 @@ const submitFeedback = useCallback(
       store,
       storageWarning,
       sendingConversationId,
+      submittingFeedbackConversationId,
       customerConversations,
       registerCustomer,
       createConversation,
@@ -424,6 +444,7 @@ const submitFeedback = useCallback(
       store,
       storageWarning,
       sendingConversationId,
+      submittingFeedbackConversationId,
       customerConversations,
       registerCustomer,
       createConversation,
