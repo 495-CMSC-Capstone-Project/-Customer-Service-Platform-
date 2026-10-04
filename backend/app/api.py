@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Path, status
@@ -28,14 +29,28 @@ from backend.app.health_service import check_health
 from backend.app.models import EscalationReason, ResolutionType
 
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+
+if configured_origins.strip():
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in configured_origins.split(",")
+        if origin.strip()
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = DEFAULT_CORS_ORIGINS
+
+
 app = FastAPI(title="Customer Service Platform API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
