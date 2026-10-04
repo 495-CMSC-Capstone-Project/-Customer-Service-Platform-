@@ -4,7 +4,7 @@ import type {
 } from "../types/support";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 35_000;
 const INVALID_RESPONSE_MESSAGE =
   "The support API returned an invalid response. Please try again.";
 
@@ -12,6 +12,7 @@ class SupportApiError extends Error {}
 
 interface SendMessageRequest {
   customerId: string;
+  requestId: string;
   message: string;
 }
 
@@ -53,6 +54,7 @@ export async function sendCustomerMessage(
         signal: controller.signal,
         body: JSON.stringify({
           customerId: payload.customerId,
+          requestId: payload.requestId,
           message: payload.message,
         }),
       },
@@ -163,6 +165,8 @@ export function messageForStatus(status: number): string {
       return "You do not have access to this conversation.";
     case 404:
       return "Conversation not found. Use customer ID cust_001 and conversation conv_001 for live AI support.";
+    case 409:
+      return "This message request is still being processed. Please wait before retrying.";
     case 429:
       return "Too many requests. Please wait a moment and try again.";
     case 503:

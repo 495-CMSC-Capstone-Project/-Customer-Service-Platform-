@@ -21,6 +21,7 @@ def setup_conversation_mocks(monkeypatch, customer_id="cust_001"):
     conversation = SimpleNamespace(
         conversation_id="conv_001",
         customer_id=customer_id,
+        status="ACTIVE",
     )
 
     monkeypatch.setattr(
@@ -34,13 +35,23 @@ def setup_conversation_mocks(monkeypatch, customer_id="cust_001"):
     )
 
     monkeypatch.setattr(
+        "backend.app.api.get_customer_message_by_request_id",
+        lambda db, conversation_id, request_id: None,
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_ai_message_by_request_id",
+        lambda db, conversation_id, request_id: None,
+    )
+
+    monkeypatch.setattr(
         "backend.app.api.save_customer_message",
-        lambda db, conversation, message_text: None,
+        lambda db, conversation, message_text, request_id: None,
     )
 
     monkeypatch.setattr(
         "backend.app.api.save_ai_message",
-        lambda db, conversation, response_text, confidence: SimpleNamespace(
+        lambda db, conversation, response_text, confidence, request_id: SimpleNamespace(
             message_id="msg_001"
         ),
     )
@@ -71,6 +82,7 @@ def test_chat_endpoint_returns_ai_response(monkeypatch):
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "How can I update my account?",
         },
     )
@@ -107,6 +119,7 @@ def test_chat_endpoint_returns_escalation_response(monkeypatch):
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "I want to speak to a human representative.",
         },
     )
@@ -125,6 +138,81 @@ def test_chat_endpoint_returns_escalation_response(monkeypatch):
     assert data["escalated"] is True
 
 
+def test_chat_endpoint_returns_existing_ai_response_for_retried_request(
+    monkeypatch,
+):
+    setup_conversation_mocks(monkeypatch)
+
+    monkeypatch.setattr(
+        "backend.app.api.get_customer_message_by_request_id",
+        lambda db, conversation_id, request_id: SimpleNamespace(
+            message_id="msg_customer_001"
+        ),
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_ai_message_by_request_id",
+        lambda db, conversation_id, request_id: SimpleNamespace(
+            message_id="msg_ai_001",
+            message_text="Previously completed response.",
+            source="AI",
+            confidence=0.85,
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/messages",
+        json={
+            "customerId": "cust_001",
+            "requestId": "req_retry_001",
+            "message": "How can I update my account?",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["conversationId"] == "conv_001"
+    assert data["messageId"] == "msg_ai_001"
+    assert data["response"] == "Previously completed response."
+    assert data["source"] == "AI"
+    assert data["confidence"] == 0.85
+    assert data["escalated"] is False
+
+
+def test_chat_endpoint_returns_conflict_when_request_is_still_processing(
+    monkeypatch,
+):
+    setup_conversation_mocks(monkeypatch)
+
+    monkeypatch.setattr(
+        "backend.app.api.get_customer_message_by_request_id",
+        lambda db, conversation_id, request_id: SimpleNamespace(
+            message_id="msg_customer_001"
+        ),
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.get_ai_message_by_request_id",
+        lambda db, conversation_id, request_id: None,
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/messages",
+        json={
+            "customerId": "cust_001",
+            "requestId": "req_processing_001",
+            "message": "How can I update my account?",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "This request is still being processed."
+    )
+
+
 def test_chat_endpoint_returns_not_found_for_missing_conversation(
     monkeypatch,
 ):
@@ -137,6 +225,7 @@ def test_chat_endpoint_returns_not_found_for_missing_conversation(
         "/api/v1/conversations/conv_missing/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "Hello",
         },
     )
@@ -171,6 +260,7 @@ def test_chat_endpoint_returns_forbidden_for_wrong_customer(
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "Hello",
         },
     )
@@ -183,11 +273,38 @@ def test_chat_endpoint_returns_bad_request_for_empty_message():
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "",
         },
     )
 
     assert response.status_code == 400
+
+
+def test_chat_endpoint_rejects_whitespace_only_message_before_saving(
+    monkeypatch,
+):
+    setup_conversation_mocks(monkeypatch)
+
+    save_calls = []
+
+    monkeypatch.setattr(
+        "backend.app.api.save_customer_message",
+        lambda *args, **kwargs: save_calls.append((args, kwargs)),
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/messages",
+        json={
+            "customerId": "cust_001",
+            "requestId": "req_blank_001",
+            "message": "   ",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Message is required"
+    assert save_calls == []
 
 
 def test_chat_endpoint_requires_request_fields():
@@ -221,6 +338,7 @@ def test_chat_endpoint_accepts_one_character_message(monkeypatch):
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "A",
         },
     )
@@ -248,6 +366,7 @@ def test_chat_endpoint_accepts_2000_character_message(monkeypatch):
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "A" * 2000,
         },
     )
@@ -260,6 +379,7 @@ def test_chat_endpoint_rejects_message_over_2000_characters():
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "A" * 2001,
         },
     )
@@ -272,6 +392,7 @@ def test_chat_endpoint_rejects_blank_customer_id():
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "",
+            "requestId": "req_001",
             "message": "Hello",
         },
     )
@@ -304,6 +425,7 @@ def test_chat_endpoint_creates_backend_escalation(monkeypatch):
         "/api/v1/conversations/conv_001/messages",
         json={
             "customerId": "cust_001",
+            "requestId": "req_001",
             "message": "I want a human representative.",
         },
     )

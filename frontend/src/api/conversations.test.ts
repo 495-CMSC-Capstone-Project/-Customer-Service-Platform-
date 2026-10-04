@@ -13,23 +13,23 @@ afterEach(() => {
 
 describe("sendCustomerMessage", () => {
   it("returns a validated AI response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json({
-          conversationId: "conv_001",
-          messageId: "msg_101",
-          response: "Try resetting your password.",
-          source: "AI",
-          confidence: 0.8,
-          escalated: false,
-        }),
-      ),
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        conversationId: "conv_001",
+        messageId: "msg_101",
+        response: "Try resetting your password.",
+        source: "AI",
+        confidence: 0.8,
+        escalated: false,
+      }),
     );
-
+  
+    vi.stubGlobal("fetch", fetchMock);
+  
     await expect(
       sendCustomerMessage("conv_001", {
         customerId: "cust_001",
+        requestId: "req_001",
         message: "I cannot sign in.",
       }),
     ).resolves.toEqual({
@@ -40,6 +40,18 @@ describe("sendCustomerMessage", () => {
       confidence: 0.8,
       escalated: false,
     });
+  
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/conv_001/messages",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          customerId: "cust_001",
+          requestId: "req_001",
+          message: "I cannot sign in.",
+        }),
+      }),
+    );
   });
 
   it("shows the backend access error for a 403 response", async () => {
@@ -51,11 +63,29 @@ describe("sendCustomerMessage", () => {
     await expect(
       sendCustomerMessage("conv_001", {
         customerId: "cust_002",
+        requestId: "req_001",
         message: "Help",
       }),
     ).rejects.toThrow("You do not have access to this conversation.");
   });
 
+  it("reports an in-progress duplicate request for a 409 response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 409 })),
+    );
+  
+    await expect(
+      sendCustomerMessage("conv_001", {
+        customerId: "cust_001",
+        requestId: "req_001",
+        message: "Help",
+      }),
+    ).rejects.toThrow(
+      "This message request is still being processed. Please wait before retrying.",
+    );
+  });
+  
   it("rejects a malformed success response", async () => {
     vi.stubGlobal(
       "fetch",
@@ -70,6 +100,7 @@ describe("sendCustomerMessage", () => {
     await expect(
       sendCustomerMessage("conv_001", {
         customerId: "cust_001",
+        requestId: "req_001",
         message: "Help",
       }),
     ).rejects.toThrow(
@@ -83,6 +114,7 @@ describe("sendCustomerMessage", () => {
     await expect(
       sendCustomerMessage("conv_001", {
         customerId: "cust_001",
+        requestId: "req_001",
         message: "Help",
       }),
     ).rejects.toThrow(
@@ -97,7 +129,7 @@ describe("sendCustomerMessage", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       messageId: "reply_1", source: "AI", confidence: 0.8, escalated: false, ...invalid,
     })));
-    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", requestId: "req_001", message: "Help" }))
       .rejects.toThrow("invalid response");
   });
 
@@ -109,9 +141,9 @@ describe("sendCustomerMessage", () => {
         options.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
       }),
     })));
-    const result = expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+    const result = expect(sendCustomerMessage("conv_001", { customerId: "cust_001", requestId: "req_001", message: "Help" }))
       .rejects.toThrow("took too long");
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(35_000);
     await result;
   });
 
@@ -119,9 +151,9 @@ describe("sendCustomerMessage", () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(new Response("not json", { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 401 })));
-    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", requestId: "req_001", message: "Help" }))
       .rejects.toThrow("invalid response");
-    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", message: "Help" }))
+    await expect(sendCustomerMessage("conv_001", { customerId: "cust_001", requestId: "req_001", message: "Help" }))
       .rejects.toThrow("not authorized");
   });
 
@@ -140,13 +172,14 @@ describe("sendCustomerMessage", () => {
 
     const request = sendCustomerMessage("conv_001", {
       customerId: "cust_001",
+      requestId: "req_001",
       message: "Help",
     });
     const result = expect(request).rejects.toThrow(
       "The support API took too long to respond. The request may have reached the server; retry only if needed.",
     );
 
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(35_000);
     await result;
   });
 });
@@ -268,7 +301,7 @@ describe("submitConversationFeedback", () => {
       "The support API took too long to respond. The feedback may have reached the server; retry only if needed.",
     );
 
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(35_000);
     await result;
   });
 });
@@ -280,5 +313,8 @@ describe("messageForStatus", () => {
       "You do not have access to this conversation.",
     );
     expect(messageForStatus(404)).toContain("Conversation not found.");
+    expect(messageForStatus(409)).toBe(
+      "This message request is still being processed. Please wait before retrying.",
+    );
   });
 });

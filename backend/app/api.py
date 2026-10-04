@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.ai_service import process_message
 from backend.app.conversation_service import (
+    get_ai_message_by_request_id,
     get_conversation,
+    get_customer_message_by_request_id,
     save_ai_message,
     save_customer_message,
     validate_conversation_customer,
@@ -26,8 +28,11 @@ from backend.app.feedback_service import (
     record_feedback,
 )
 from backend.app.health_service import check_health
-from backend.app.models import EscalationReason, ResolutionType
-
+from backend.app.models import (
+    ConversationStatus,
+    EscalationReason,
+    ResolutionType,
+)
 
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:5173",
@@ -64,6 +69,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     customerId: str = Field(min_length=1)
+    requestId: str = Field(min_length=1, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
 
 
@@ -152,10 +158,47 @@ def chat(
             detail=str(exc),
         ) from exc
 
+    if not request.message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Message is required",
+        )
+
+    existing_message = get_customer_message_by_request_id(
+        db,
+        conversationId,
+        request.requestId,
+    )
+
+    if existing_message is not None:
+        existing_ai_message = get_ai_message_by_request_id(
+            db,
+            conversationId,
+            request.requestId,
+        )
+
+        if existing_ai_message is None:
+            raise HTTPException(
+                status_code=409,
+                detail="This request is still being processed.",
+            )
+
+        return ChatResponse(
+            conversationId=conversationId,
+            messageId=existing_ai_message.message_id,
+            response=existing_ai_message.message_text,
+            source=existing_ai_message.source or "AI",
+            confidence=float(existing_ai_message.confidence),
+            escalated=(
+                conversation.status == ConversationStatus.ESCALATED
+            ),
+        )
+
     save_customer_message(
         db,
         conversation,
         request.message,
+        request.requestId,
     )
 
     try:
@@ -175,6 +218,7 @@ def chat(
         conversation,
         result.response_text,
         result.confidence_score,
+        request.requestId,
     )
 
     if result.escalation_required:
