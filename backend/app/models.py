@@ -112,6 +112,12 @@ class Message(Base):
             "conversation_id",
             "created_at",
         ),
+        Index(
+            "uq_message_request_per_conversation",
+            "conversation_id",
+            "request_id",
+            unique=True,
+        ),
     )
 
     message_id: Mapped[str] = mapped_column(
@@ -121,6 +127,10 @@ class Message(Base):
     conversation_id: Mapped[str] = mapped_column(
         ForeignKey("conversations.conversation_id"),
         nullable=False,
+    )
+    request_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
     )
     sender_type: Mapped[SenderType] = mapped_column(
         Enum(SenderType, name="sender_type"),
