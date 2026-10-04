@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models import (
@@ -15,6 +16,20 @@ def get_conversation(
     conversation_id: str,
 ) -> Conversation | None:
     return db.get(Conversation, conversation_id)
+
+
+def get_customer_message_by_request_id(
+    db: Session,
+    conversation_id: str,
+    request_id: str,
+) -> Message | None:
+    return db.scalar(
+        select(Message).where(
+            Message.conversation_id == conversation_id,
+            Message.request_id == request_id,
+            Message.sender_type == SenderType.CUSTOMER,
+        )
+    )
 
 
 def validate_conversation_customer(
