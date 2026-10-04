@@ -1,3 +1,6 @@
+import importlib
+import os
+
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -575,6 +578,33 @@ def test_feedback_endpoint_rejects_invalid_request():
             "resolutionType": "AI_RESOLVED",
             "successful": True,
             "category": "",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_cors_allows_localhost_by_default():
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "http://localhost:5173"
+    )
+
+
+def test_cors_rejects_unlisted_origin():
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "https://frontend.example",
+            "Access-Control-Request-Method": "GET",
         },
     )
 
