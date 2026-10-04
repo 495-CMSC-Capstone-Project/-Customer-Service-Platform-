@@ -19,6 +19,7 @@ export interface ConversationDraft {
 export interface SupportContextValue {
   store: PrototypeStore;
   sendingConversationId: string | null;
+  submittingFeedbackConversationId: string | null;
   storageWarning: string | null;
   customerConversations: Conversation[];
   registerCustomer: (customerId: string, name: string) => void;
@@ -36,7 +37,7 @@ export interface SupportContextValue {
       successful: boolean;
       category: string;
     },
-  ) => Feedback;
+  ) => Promise<Feedback>;
   getMessages: (conversationId: string) => Message[];
   getTicket: (conversationId: string) => Ticket | undefined;
   getFeedback: (conversationId: string) => Feedback | undefined;

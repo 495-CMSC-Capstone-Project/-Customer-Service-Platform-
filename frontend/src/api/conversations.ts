@@ -1,4 +1,7 @@
-import type { SendMessageResult } from "../types/support";
+import type {
+  ResolutionType,
+  SendMessageResult,
+} from "../types/support";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -10,6 +13,17 @@ class SupportApiError extends Error {}
 interface SendMessageRequest {
   customerId: string;
   message: string;
+}
+
+interface SubmitFeedbackRequest {
+  resolutionType: ResolutionType;
+  successful: boolean;
+  category: string;
+}
+
+interface FeedbackApiResponse {
+  feedbackId: string;
+  status: "RECORDED";
 }
 
 interface ChatApiResponse {
@@ -73,7 +87,61 @@ export async function sendCustomerMessage(
   } finally {
     clearTimeout(timeoutId);
   }
+}
 
+export async function submitConversationFeedback(
+  conversationId: string,
+  payload: SubmitFeedbackRequest,
+): Promise<FeedbackApiResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}/feedback`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!response.ok) {
+      throw new SupportApiError(feedbackMessageForStatus(response.status));
+    }
+
+    let data: unknown;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      throw new SupportApiError(INVALID_RESPONSE_MESSAGE);
+    }
+
+    if (!isFeedbackApiResponse(data)) {
+      throw new SupportApiError(INVALID_RESPONSE_MESSAGE);
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof SupportApiError) throw error;
+
+    if (isAbortError(error)) {
+      throw new Error(
+        "The support API took too long to respond. The feedback may have reached the server; retry only if needed.",
+      );
+    }
+
+    throw new Error(
+      "Unable to reach the support API. Check your connection and try again.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isAbortError(error: unknown): boolean {
@@ -123,5 +191,36 @@ function isChatApiResponse(value: unknown): value is ChatApiResponse {
     response.confidence >= 0 &&
     response.confidence <= 1 &&
     typeof response.escalated === "boolean"
+  );
+}
+
+function feedbackMessageForStatus(status: number): string {
+  switch (status) {
+    case 400:
+      return "The feedback could not be recorded. Check the information and try again.";
+    case 404:
+      return "Conversation not found.";
+    case 409:
+      return "Feedback has already been recorded for this conversation.";
+    case 503:
+      return "The service is temporarily unavailable. Please try again later.";
+    default:
+      return "An unexpected service error occurred while recording feedback.";
+  }
+}
+
+function isFeedbackApiResponse(
+  value: unknown,
+): value is FeedbackApiResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const response = value as Record<string, unknown>;
+
+  return (
+    typeof response.feedbackId === "string" &&
+    response.feedbackId.length > 0 &&
+    response.status === "RECORDED"
   );
 }
