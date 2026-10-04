@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.ai_service import process_message
 from backend.app.conversation_service import (
+    get_ai_message_by_request_id,
     get_conversation,
     get_customer_message_by_request_id,
     save_ai_message,
@@ -26,8 +27,11 @@ from backend.app.feedback_service import (
     record_feedback,
 )
 from backend.app.health_service import check_health
-from backend.app.models import EscalationReason, ResolutionType
-
+from backend.app.models import (
+    ConversationStatus,
+    EscalationReason,
+    ResolutionType,
+)
 
 app = FastAPI(title="Customer Service Platform API")
 
@@ -141,11 +145,29 @@ def chat(
     )
 
     if existing_message is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="This request has already been submitted.",
+        existing_ai_message = get_ai_message_by_request_id(
+            db,
+            conversationId,
+            request.requestId,
         )
-    
+
+        if existing_ai_message is None:
+            raise HTTPException(
+                status_code=409,
+                detail="This request is still being processed.",
+            )
+
+        return ChatResponse(
+            conversationId=conversationId,
+            messageId=existing_ai_message.message_id,
+            response=existing_ai_message.message_text,
+            source=existing_ai_message.source or "AI",
+            confidence=float(existing_ai_message.confidence),
+            escalated=(
+                conversation.status == ConversationStatus.ESCALATED
+            ),
+        )
+
     save_customer_message(
         db,
         conversation,
@@ -170,6 +192,7 @@ def chat(
         conversation,
         result.response_text,
         result.confidence_score,
+        request.requestId,
     )
 
     if result.escalation_required:
