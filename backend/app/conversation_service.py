@@ -31,10 +31,12 @@ def save_customer_message(
     db: Session,
     conversation: Conversation,
     message_text: str,
+    request_id: str,
 ) -> Message:
     message = Message(
         message_id=f"msg_{uuid4().hex}",
         conversation_id=conversation.conversation_id,
+        request_id=request_id,
         sender_type=SenderType.CUSTOMER,
         message_text=message_text,
         source=None,
