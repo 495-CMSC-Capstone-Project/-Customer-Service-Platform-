@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.app.ai_service import process_message
 from backend.app.conversation_service import (
     get_conversation,
+    get_customer_message_by_request_id,
     save_ai_message,
     save_customer_message,
     validate_conversation_customer,
@@ -133,6 +134,18 @@ def chat(
             detail=str(exc),
         ) from exc
 
+    existing_message = get_customer_message_by_request_id(
+        db,
+        conversationId,
+        request.requestId,
+    )
+
+    if existing_message is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This request has already been submitted.",
+        )
+    
     save_customer_message(
         db,
         conversation,
