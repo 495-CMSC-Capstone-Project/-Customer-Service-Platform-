@@ -281,6 +281,32 @@ def test_chat_endpoint_returns_bad_request_for_empty_message():
     assert response.status_code == 400
 
 
+def test_chat_endpoint_rejects_whitespace_only_message_before_saving(
+    monkeypatch,
+):
+    setup_conversation_mocks(monkeypatch)
+
+    save_calls = []
+
+    monkeypatch.setattr(
+        "backend.app.api.save_customer_message",
+        lambda *args, **kwargs: save_calls.append((args, kwargs)),
+    )
+
+    response = client.post(
+        "/api/v1/conversations/conv_001/messages",
+        json={
+            "customerId": "cust_001",
+            "requestId": "req_blank_001",
+            "message": "   ",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Message is required"
+    assert save_calls == []
+
+
 def test_chat_endpoint_requires_request_fields():
     response = client.post(
         "/api/v1/conversations/conv_001/messages",
