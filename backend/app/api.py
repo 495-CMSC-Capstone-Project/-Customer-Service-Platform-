@@ -44,6 +44,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     customerId: str = Field(min_length=1)
+    requestId: str = Field(min_length=1, max_length=64)
     message: str = Field(min_length=1, max_length=2000)
 
 
@@ -136,6 +137,7 @@ def chat(
         db,
         conversation,
         request.message,
+        request.requestId,
     )
 
     try:
