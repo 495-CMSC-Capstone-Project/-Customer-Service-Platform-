@@ -88,10 +88,28 @@ describe("customer support workflows", () => {
     expect((field as HTMLTextAreaElement).value).toBe("");
     expect(sessionStorage.getItem(draftKey)).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, options] = fetchMock.mock.calls[1];
-    expect(url).toBe("/api/v1/conversations/conv_001/messages");
-    expect(JSON.parse(options.body)).toEqual({ customerId: "cust_001", message: "Cannot log in" });
-  });
+
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0];
+    const [retryUrl, retryOptions] = fetchMock.mock.calls[1];
+    
+    expect(firstUrl).toBe("/api/v1/conversations/conv_001/messages");
+    expect(retryUrl).toBe("/api/v1/conversations/conv_001/messages");
+    
+    const firstBody = JSON.parse(firstOptions.body);
+    const retryBody = JSON.parse(retryOptions.body);
+    
+    expect(firstBody).toEqual({
+      customerId: "cust_001",
+      requestId: expect.any(String),
+      message: "Cannot log in",
+    });
+    
+    expect(retryBody).toEqual({
+      customerId: "cust_001",
+      requestId: firstBody.requestId,
+      message: "Cannot log in",
+    });
+    });
 
   it("restores a draft after navigating away and after remounting, without leaking it to another profile", async () => {
     const { user, unmount } = openApp();
