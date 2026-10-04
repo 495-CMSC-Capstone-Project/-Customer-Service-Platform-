@@ -113,9 +113,10 @@ class Message(Base):
             "created_at",
         ),
         Index(
-            "uq_message_request_per_conversation",
+            "uq_message_request_sender_per_conversation",
             "conversation_id",
             "request_id",
+            "sender_type",
             unique=True,
         ),
     )
