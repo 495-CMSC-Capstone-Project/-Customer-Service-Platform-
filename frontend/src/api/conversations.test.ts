@@ -13,46 +13,46 @@ afterEach(() => {
 
 describe("sendCustomerMessage", () => {
   it("returns a validated AI response", async () => {
-  const fetchMock = vi.fn().mockResolvedValue(
-    Response.json({
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        conversationId: "conv_001",
+        messageId: "msg_101",
+        response: "Try resetting your password.",
+        source: "AI",
+        confidence: 0.8,
+        escalated: false,
+      }),
+    );
+  
+    vi.stubGlobal("fetch", fetchMock);
+  
+    await expect(
+      sendCustomerMessage("conv_001", {
+        customerId: "cust_001",
+        requestId: "req_001",
+        message: "I cannot sign in.",
+      }),
+    ).resolves.toEqual({
       conversationId: "conv_001",
       messageId: "msg_101",
       response: "Try resetting your password.",
       source: "AI",
       confidence: 0.8,
       escalated: false,
-    }),
-  );
-
-  vi.stubGlobal("fetch", fetchMock);
-
-  await expect(
-    sendCustomerMessage("conv_001", {
-      customerId: "cust_001",
-      requestId: "req_001",
-      message: "I cannot sign in.",
-    }),
-  ).resolves.toEqual({
-    conversationId: "conv_001",
-    messageId: "msg_101",
-    response: "Try resetting your password.",
-    source: "AI",
-    confidence: 0.8,
-    escalated: false,
-  });
-
-  expect(fetchMock).toHaveBeenCalledWith(
-    "/api/v1/conversations/conv_001/messages",
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({
-        customerId: "cust_001",
-        requestId: "req_001",
-        message: "I cannot sign in.",
+    });
+  
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/conv_001/messages",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          customerId: "cust_001",
+          requestId: "req_001",
+          message: "I cannot sign in.",
+        }),
       }),
-    }),
-  );
-});
+    );
+  });
 
   it("shows the backend access error for a 403 response", async () => {
     vi.stubGlobal(
@@ -70,21 +70,21 @@ describe("sendCustomerMessage", () => {
   });
 
   it("reports an in-progress duplicate request for a 409 response", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(new Response(null, { status: 409 })),
-  );
-
-  await expect(
-    sendCustomerMessage("conv_001", {
-      customerId: "cust_001",
-      requestId: "req_001",
-      message: "Help",
-    }),
-  ).rejects.toThrow(
-    "This message request has already been submitted.",
-  );
-});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 409 })),
+    );
+  
+    await expect(
+      sendCustomerMessage("conv_001", {
+        customerId: "cust_001",
+        requestId: "req_001",
+        message: "Help",
+      }),
+    ).rejects.toThrow(
+      "This message request is still being processed. Please wait before retrying.",
+    );
+  });
   
   it("rejects a malformed success response", async () => {
     vi.stubGlobal(
@@ -314,7 +314,7 @@ describe("messageForStatus", () => {
     );
     expect(messageForStatus(404)).toContain("Conversation not found.");
     expect(messageForStatus(409)).toBe(
-      "This message request has already been submitted.",
+      "This message request is still being processed. Please wait before retrying.",
     );
   });
 });
