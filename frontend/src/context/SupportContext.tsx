@@ -78,6 +78,9 @@ export function SupportProvider({ children }: { children: ReactNode }) {
   
   const storeRef = useRef(store);
   const pendingRequest = useRef(false);
+  const retryRequestIds = useRef<
+    Record<string, { message: string; requestId: string }>
+  >({});
   const pendingFeedbackRequest = useRef(false);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   // Keep drafts beside the request state so route changes do not reset them.
@@ -214,11 +217,26 @@ export function SupportProvider({ children }: { children: ReactNode }) {
       setSendingConversationId(conversationId);
       const draftKey = `csp-draft:${customerId}:${conversationId}`;
       const submittedDraft = draftsRef.current[draftKey] ?? EMPTY_DRAFT;
+      
+      const previousRequest = retryRequestIds.current[draftKey];
+      const requestId =
+        previousRequest?.message === trimmed
+          ? previousRequest.requestId
+          : createId("req");
+      
+      retryRequestIds.current[draftKey] = {
+        message: trimmed,
+        requestId,
+      };
+      
       saveDraft(draftKey, { ...submittedDraft, error: null });
       const sentAt = new Date().toISOString();
       try {
-        const result = await sendCustomerMessage(conversationId, { customerId, message: trimmed });
+        const result = await sendCustomerMessage(conversationId, { customerId, requestId, message: trimmed });
         const replyAt = new Date().toISOString();
+
+        delete retryRequestIds.current[draftKey];
+        
         updateStore((current) => ({
           ...current,
           messages: [
