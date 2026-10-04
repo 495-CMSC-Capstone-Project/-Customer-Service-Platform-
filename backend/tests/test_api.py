@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from backend.app.ai_service import AIResponse
-from backend.app.api import app
+from backend.app.api import app, get_cors_allowed_origins
 from backend.app.database import get_db
 
 
@@ -606,3 +606,17 @@ def test_cors_rejects_unlisted_origin():
     )
 
     assert response.status_code == 400
+
+
+def test_cors_uses_configured_origins(monkeypatch):
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://app.example.com, https://admin.example.com",
+    )
+
+    origins = get_cors_allowed_origins()
+
+    assert origins == [
+        "https://app.example.com",
+        "https://admin.example.com",
+    ]
