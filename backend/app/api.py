@@ -138,6 +138,12 @@ def chat(
             detail=str(exc),
         ) from exc
 
+    if not request.message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Message is required",
+        )
+
     existing_message = get_customer_message_by_request_id(
         db,
         conversationId,
