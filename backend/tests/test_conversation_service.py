@@ -3,7 +3,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.app.conversation_service import (
+    get_ai_message_by_request_id,
     get_conversation,
+    get_customer_message_by_request_id,
     save_ai_message,
     save_customer_message,
     validate_conversation_customer,
@@ -100,10 +102,12 @@ def test_save_customer_message(db):
         db,
         conversation,
         "How can I update my account?",
+        "req_001",
     )
 
     assert message.message_id.startswith("msg_")
     assert message.conversation_id == "conv_001"
+    assert message.request_id == "req_001"
     assert message.sender_type == SenderType.CUSTOMER
     assert message.message_text == "How can I update my account?"
     assert message.source is None
@@ -121,11 +125,62 @@ def test_save_ai_message(db):
         conversation,
         "Here is your response.",
         0.80,
+        "req_001",
     )
 
     assert message.message_id.startswith("msg_")
     assert message.conversation_id == "conv_001"
+    assert message.request_id == "req_001"
     assert message.sender_type == SenderType.AI
     assert message.message_text == "Here is your response."
     assert message.source == "AI"
     assert float(message.confidence) == 0.80
+
+
+def test_get_customer_message_by_request_id(db):
+    conversation = get_conversation(
+        db,
+        "conv_001",
+    )
+
+    saved = save_customer_message(
+        db,
+        conversation,
+        "How can I update my account?",
+        "req_customer_001",
+    )
+
+    found = get_customer_message_by_request_id(
+        db,
+        "conv_001",
+        "req_customer_001",
+    )
+
+    assert found is not None
+    assert found.message_id == saved.message_id
+    assert found.sender_type == SenderType.CUSTOMER
+
+
+def test_get_ai_message_by_request_id(db):
+    conversation = get_conversation(
+        db,
+        "conv_001",
+    )
+
+    saved = save_ai_message(
+        db,
+        conversation,
+        "Here is your response.",
+        0.80,
+        "req_ai_001",
+    )
+
+    found = get_ai_message_by_request_id(
+        db,
+        "conv_001",
+        "req_ai_001",
+    )
+
+    assert found is not None
+    assert found.message_id == saved.message_id
+    assert found.sender_type == SenderType.AI
