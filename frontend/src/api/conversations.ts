@@ -166,7 +166,7 @@ export function messageForStatus(status: number): string {
     case 404:
       return "Conversation not found. Use customer ID cust_001 and conversation conv_001 for live AI support.";
     case 409:
-      return "This message request has already been submitted.";
+      return "This message request is still being processed. Please wait before retrying.";
     case 429:
       return "Too many requests. Please wait a moment and try again.";
     case 503:
