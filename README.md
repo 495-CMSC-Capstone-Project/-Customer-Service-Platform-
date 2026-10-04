@@ -534,21 +534,28 @@ successful build; they do not establish that the application is deployed.
 
 ### Deployment Requirements
 
-For a separate frontend host, agree on the actual origin and configure an
-explicit backend CORS allowlist. The current allowlist supports only the local
-Vite origins. A same-origin `/api` reverse proxy is another option. Setting
-`VITE_API_BASE_URL` alone does not make cross-origin requests work.
+For a separately hosted frontend, this project uses an explicit backend CORS allowlist. Configure the frontend with `VITE_API_BASE_URL` pointing to the deployed backend, and configure the backend with `CORS_ALLOWED_ORIGINS` containing the exact deployed frontend origin or origins.
 
-The frontend's request timeout is 20 seconds; the AI provider timeout is 30
-seconds. The team still needs to coordinate these budgets and the behavior of
-ambiguous retries. These items are tracked in
-[issue 12](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/12)
-and [issue 13](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/13).
+Example configuration format:
 
-This checkout has no deployment workflow or `/health` endpoint. Deployment
-verification needs a real running environment, evidence of a successful support
-request, and a documented rollback. Add deployment screenshots from that
-environment when the team prepares its final portfolio.
+```text
+VITE_API_BASE_URL=<backend-base-url>
+CORS_ALLOWED_ORIGINS=<frontend-origin>
+```
+
+Multiple frontend origins can be supplied as a comma-separated list:
+
+```text
+CORS_ALLOWED_ORIGINS=<frontend-origin-1>,<frontend-origin-2>
+```
+
+When `CORS_ALLOWED_ORIGINS` is not set, the backend defaults to the local Vite development origins `http://localhost:5173` and `http://127.0.0.1:5173`.
+
+Production deployments should use only the intended frontend origins. Do not use a wildcard (`*`) as a substitute for configuring the actual deployed origins. Setting `VITE_API_BASE_URL` alone does not authorize cross-origin browser requests; the frontend origin must also be allowed by the backend.
+
+The frontend's request timeout is 20 seconds; the AI provider timeout is 30 seconds. Timeout coordination and ambiguous retry behavior are tracked in [issue 12](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/12).
+
+This checkout has no deployment workflow. Deployment verification needs a real running environment, evidence of a successful support request, and a documented rollback. Add deployment screenshots from that environment when the team prepares its final portfolio.
 
 ## Development Workflow
 

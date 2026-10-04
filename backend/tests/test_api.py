@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from backend.app.ai_service import AIResponse
-from backend.app.api import app
+from backend.app.api import app, get_cors_allowed_origins
 from backend.app.database import get_db
 
 
@@ -579,3 +579,44 @@ def test_feedback_endpoint_rejects_invalid_request():
     )
 
     assert response.status_code == 400
+
+
+def test_cors_allows_localhost_by_default():
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "http://localhost:5173"
+    )
+
+
+def test_cors_rejects_unlisted_origin():
+    response = client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "https://frontend.example",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_cors_uses_configured_origins(monkeypatch):
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://app.example.com, https://admin.example.com",
+    )
+
+    origins = get_cors_allowed_origins()
+
+    assert origins == [
+        "https://app.example.com",
+        "https://admin.example.com",
+    ]
