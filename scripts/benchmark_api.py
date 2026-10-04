@@ -60,7 +60,7 @@ def main():
                 started = perf_counter()
                 response = client.post(
                     "/api/v1/conversations/conv_benchmark/messages",
-                    json={"customerId": "cust_benchmark", "message": "How can I update my account?"},
+                    json={"customerId": "cust_benchmark", "requestId": f"benchmark-{index}", "message": "How can I update my account?"},
                 )
                 elapsed_ms = (perf_counter() - started) * 1000
                 data = response.json()
