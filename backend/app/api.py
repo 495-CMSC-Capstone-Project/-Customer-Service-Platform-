@@ -34,16 +34,21 @@ DEFAULT_CORS_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
-configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
 
-if configured_origins.strip():
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip()
-        for origin in configured_origins.split(",")
-        if origin.strip()
-    ]
-else:
-    CORS_ALLOWED_ORIGINS = DEFAULT_CORS_ORIGINS
+def get_cors_allowed_origins() -> list[str]:
+    configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+
+    if configured_origins.strip():
+        return [
+            origin.strip()
+            for origin in configured_origins.split(",")
+            if origin.strip()
+        ]
+
+    return DEFAULT_CORS_ORIGINS
+
+
+CORS_ALLOWED_ORIGINS = get_cors_allowed_origins()
 
 
 app = FastAPI(title="Customer Service Platform API")
