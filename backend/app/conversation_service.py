@@ -32,6 +32,20 @@ def get_customer_message_by_request_id(
     )
 
 
+def get_ai_message_by_request_id(
+    db: Session,
+    conversation_id: str,
+    request_id: str,
+) -> Message | None:
+    return db.scalar(
+        select(Message).where(
+            Message.conversation_id == conversation_id,
+            Message.request_id == request_id,
+            Message.sender_type == SenderType.AI,
+        )
+    )
+
+
 def validate_conversation_customer(
     conversation: Conversation,
     customer_id: str,
@@ -72,10 +86,12 @@ def save_ai_message(
     conversation: Conversation,
     response_text: str,
     confidence: float,
+    request_id: str,
 ) -> Message:
     message = Message(
         message_id=f"msg_{uuid4().hex}",
         conversation_id=conversation.conversation_id,
+        request_id=request_id,
         sender_type=SenderType.AI,
         message_text=response_text,
         source="AI",
