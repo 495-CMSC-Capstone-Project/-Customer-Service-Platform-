@@ -1,0 +1,22 @@
+66 passed. Coverage threshold 80% met. Python 3.13.5, pytest with PostgreSQL integration database customer_service_test.
+
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.13.5-final-0 _______________
+
+Name                                  Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------
+backend/app/__init__.py                   0      0   100%
+backend/app/ai_provider.py               27      0   100%
+backend/app/ai_service.py                25      0   100%
+backend/app/api.py                      118      6    95%   210-211, 282-283, 326-327
+backend/app/conversation_service.py      28      0   100%
+backend/app/database.py                  13      4    69%   29-34
+backend/app/escalation_service.py        47      8    83%   44, 47, 71-73, 98-99, 103
+backend/app/feedback_service.py          27      4    85%   39, 58-60
+backend/app/health_service.py            26      0   100%
+backend/app/models.py                    72      0   100%
+backend/app/seed.py                      14     14     0%   1-27
+-------------------------------------------------------------------
+TOTAL                                   397     36    91%
+Required test coverage of 80% reached. Total coverage: 90.93%
+66 passed, 7 warnings in 2.42s
