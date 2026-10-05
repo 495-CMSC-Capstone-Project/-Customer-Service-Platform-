@@ -1,10 +1,8 @@
 # Customer Service Platform Architecture
 
-This document describes the architecture of the Customer Service Platform and how the major frontend, backend, database, AI, and support components interact.
+This document describes the final course-project architecture of the Customer Service Platform and how the major frontend, backend, database, AI, and support components interact.
 
-The system is designed as a modular AI-assisted customer support platform that allows customers to submit support messages, receive AI-generated responses, provide feedback, and escalate conversations for human review when needed.
-
-> **Final Release Note:** This document reflects the current final-release architecture and distinguishes between functionality already integrated into `main` and functionality implemented in open final-release pull requests that is still pending merge or frontend/backend integration.
+The system is designed as a modular AI-assisted customer-support platform that allows customers to submit support messages, receive AI-generated responses, provide feedback, and escalate conversations for human review when needed.
 
 ---
 
@@ -12,7 +10,7 @@ The system is designed as a modular AI-assisted customer support platform that a
 
 The Customer Service Platform uses a layered architecture with the following major areas:
 
-- React frontend
+- React and TypeScript frontend
 - FastAPI backend API
 - AI orchestration and provider services
 - PostgreSQL persistence
@@ -20,9 +18,9 @@ The Customer Service Platform uses a layered architecture with the following maj
 - escalation and ticket services
 - feedback services
 - health monitoring
-- CI/CD quality workflows
+- automated testing and CI workflows
 
-The architecture separates user-interface concerns from backend business logic and persistence so that each area can be tested and maintained independently.
+The architecture separates user-interface concerns from backend business logic, AI-provider communication, and persistence so that each area can be developed, tested, and maintained independently.
 
 ---
 
@@ -32,15 +30,20 @@ A typical customer-support interaction follows this sequence:
 
 1. The customer signs in to the frontend.
 2. The customer opens an existing conversation.
-3. The frontend sends the customer's message to the FastAPI backend.
-4. The backend validates the conversation and customer relationship.
-5. The customer message is stored.
-6. The backend passes the message to the AI orchestration layer.
-7. The AI provider returns a response.
-8. The backend stores the AI response.
-9. The frontend displays the AI-generated response.
-10. If escalation is required, the backend can create or reuse an escalation ticket.
-11. The customer can later provide feedback about the support interaction.
+3. The customer submits a support message.
+4. The frontend generates or reuses a `requestId`.
+5. The frontend sends the message to the FastAPI backend.
+6. The backend validates the request, conversation, and customer relationship.
+7. The backend checks the `requestId` for duplicate or in-progress processing.
+8. The customer message is stored.
+9. The backend passes the message to the AI orchestration layer.
+10. The AI provider returns a response.
+11. The backend stores the AI response.
+12. If human review is required, the backend creates or reuses an active escalation ticket.
+13. The backend returns the response to the frontend.
+14. The frontend displays the AI-generated response and escalation state.
+15. The customer can later submit final resolution feedback.
+16. The feedback record is stored persistently by the backend.
 
 ---
 
@@ -50,7 +53,7 @@ The frontend is implemented with React and TypeScript.
 
 Its responsibilities include:
 
-- sign-in and protected navigation
+- prototype sign-in and protected navigation
 - conversation display
 - message composition and sending
 - AI-response display
@@ -61,8 +64,10 @@ Its responsibilities include:
 - error display
 - preservation of message drafts
 - retry and recovery behavior
+- request-ID management
+- API-response validation
 
-The frontend communicates with the backend through API requests rather than directly accessing the database or AI provider.
+The frontend communicates with the backend through REST API requests rather than directly accessing the database or AI provider.
 
 ---
 
@@ -77,10 +82,11 @@ Examples include:
 - preventing overlapping message sends
 - preventing a delayed response from replacing a newer draft
 - keeping conversation state separated between conversations
+- preserving the same `requestId` when retrying the same pending message
+- handling a `409 Conflict` when the backend reports that the same request is still being processed
+- using a 35-second request timeout
 
-These behaviors reduce the risk of lost customer input and are covered by automated frontend tests.
-
-> **Integration Note:** Frontend and backend timeout/retry coordination is still tracked as remaining final-release integration work.
+These behaviors reduce the risk of lost customer input and duplicate message processing and are covered by automated frontend tests.
 
 ---
 
@@ -92,10 +98,11 @@ The API layer is responsible for:
 
 - validating incoming requests
 - validating conversation ownership
+- detecting duplicate or in-progress message requests
 - calling conversation services
 - calling AI services
 - persisting messages
-- creating escalation tickets
+- creating or reusing escalation tickets
 - recording feedback
 - exposing backend health information
 - returning structured JSON responses
@@ -103,7 +110,9 @@ The API layer is responsible for:
 
 The primary API prefix is:
 
-`/api/v1`
+```text
+/api/v1
+```
 
 ---
 
@@ -111,36 +120,64 @@ The primary API prefix is:
 
 The primary customer-message endpoint is:
 
-`POST /api/v1/conversations/{conversationId}/messages`
+```text
+POST /api/v1/conversations/{conversationId}/messages
+```
 
 The message-processing flow is:
 
 1. Receive the request.
-2. Validate the conversation exists.
-3. Verify that the customer is associated with the conversation.
-4. Save the customer message.
-5. Send the message to the AI service.
-6. Receive the AI response and confidence information.
-7. Save the AI response.
-8. Evaluate whether escalation is required.
-9. Return the response to the frontend.
+2. Validate the request fields.
+3. Validate that the conversation exists.
+4. Verify that the customer is associated with the conversation.
+5. Check whether the supplied `requestId` has already been used.
+6. If the request is new, save the customer message.
+7. Send the message to the AI service.
+8. Receive the AI response and confidence information.
+9. Save the AI response.
+10. Evaluate whether escalation is required.
+11. Create or reuse an escalation ticket when needed.
+12. Return the response to the frontend.
 
-This endpoint connects the frontend conversation experience to backend persistence and AI processing.
+This endpoint connects the frontend conversation experience to backend persistence, AI processing, escalation handling, and duplicate-request protection.
 
 ---
 
-## 7. AI Orchestration Layer
+## 7. Request ID and Duplicate Protection
+
+Each customer-message request includes a required `requestId`.
+
+The frontend retains the same `requestId` when retrying the same pending customer message.
+
+The backend uses the value to reduce duplicate processing.
+
+If a stored customer message already exists for the same conversation and `requestId`:
+
+1. The backend searches for the corresponding stored AI response.
+2. If the AI response exists, the previously stored response is returned.
+3. If the AI response is not yet available, the backend returns:
+
+```text
+409 Conflict
+```
+
+This design reduces the chance that a network interruption or frontend retry creates duplicate customer and AI message pairs.
+
+---
+
+## 8. AI Orchestration Layer
 
 The AI layer is separated from the main API route logic.
 
 The AI service is responsible for:
 
-- sending requests to the configured AI provider
+- sending requests to the configured external AI provider
 - receiving AI-generated responses
 - returning response text
 - returning confidence information
 - identifying escalation conditions
 - handling provider failures
+- returning fallback behavior when appropriate
 
 The backend uses environment-based configuration for the AI provider.
 
@@ -150,11 +187,11 @@ Required environment variables include:
 - `AI_API_KEY`
 - `AI_MODEL`
 
-This design keeps AI-provider configuration separate from application code.
+This design keeps AI-provider configuration separate from application code and allows another OpenAI-compatible provider to be used without redesigning the application.
 
 ---
 
-## 8. AI Failure and Escalation Behavior
+## 9. AI Failure and Escalation Behavior
 
 The system can identify situations where human review may be appropriate.
 
@@ -164,21 +201,22 @@ Examples include:
 - low AI confidence
 - AI provider failure
 
-The backend escalation service maps these situations to escalation reasons and support queues.
+The backend escalation service maps these situations to escalation reasons.
 
-Examples include:
+Supported escalation reasons include:
 
-- `CUSTOMER_REQUEST`
 - `LOW_CONFIDENCE`
+- `COMPLEX_ISSUE`
+- `CUSTOMER_REQUEST`
 - `AI_FAILURE`
 
-When escalation is required, the backend can create or reuse an active ticket.
+When escalation is required, the backend creates or reuses an active escalation ticket and updates the conversation status.
 
 ---
 
-## 9. Escalation and Ticket Layer
+## 10. Escalation and Ticket Layer
 
-> **Current Status:** Persistent escalation functionality is implemented in PR #14 and is pending merge into `main`.
+The persistent escalation service is integrated into the final backend.
 
 The escalation service is responsible for:
 
@@ -188,23 +226,33 @@ The escalation service is responsible for:
 - assigning an escalation reason
 - assigning a support queue
 - updating the conversation status
-- committing the ticket and conversation-status update together
+- committing the ticket and conversation-status update
 
 A conversation that is escalated is updated to:
 
-`ESCALATED`
+```text
+ESCALATED
+```
 
-A new support ticket begins with the status:
+A new support ticket begins with:
 
-`OPEN`
+```text
+OPEN
+```
 
-The escalation service helps keep ticket creation separate from API route logic.
+The default queue is:
+
+```text
+General Support
+```
+
+The escalation service keeps ticket-management logic separate from API route logic.
 
 ---
 
-## 10. Feedback Layer
+## 11. Feedback Layer
 
-> **Current Status:** Persistent feedback functionality is implemented in PR #14 and is pending merge into `main`.
+Persistent feedback functionality is integrated into the final backend and frontend workflow.
 
 The feedback service is responsible for:
 
@@ -214,22 +262,28 @@ The feedback service is responsible for:
 - recording a feedback category
 - preventing duplicate final feedback for the same conversation
 
-Example resolution types include:
+Supported resolution types include:
 
 - `AI_RESOLVED`
 - `HUMAN_RESOLVED`
 
-The frontend feedback workflow will be connected to this persistent backend service during final integration.
+Only one final feedback record is stored for each conversation.
+
+Duplicate feedback submissions return:
+
+```text
+409 Conflict
+```
 
 ---
 
-## 11. Database Layer
+## 12. Database Layer
 
 The backend uses SQLAlchemy for database interaction.
 
-PostgreSQL is the intended persistent database for the final application.
+PostgreSQL is the persistent database used by the application and final integration testing.
 
-The data layer supports application entities such as:
+The data layer supports application entities including:
 
 - conversations
 - messages
@@ -242,12 +296,13 @@ This separation allows persistence behavior to be tested independently of the us
 
 ---
 
-## 12. Conversation Persistence
+## 13. Conversation Persistence
 
 The conversation service is responsible for:
 
 - retrieving conversations
 - validating that a customer owns a conversation
+- retrieving customer messages by request ID
 - saving customer messages
 - saving AI messages
 - updating conversation information
@@ -258,9 +313,7 @@ This keeps conversation-related data access reusable and easier to test.
 
 ---
 
-## 13. Transactional Escalation Update
-
-The final-release escalation design updates the support ticket and conversation status together.
+## 14. Transactional Escalation Update
 
 When an escalation is created:
 
@@ -268,25 +321,25 @@ When an escalation is created:
 2. The ticket is assigned an escalation reason.
 3. The ticket status is set to `OPEN`.
 4. The conversation status is changed to `ESCALATED`.
-5. The changes are committed together.
+5. The ticket and conversation changes are committed.
 
 This helps avoid a state where a support ticket exists but the related conversation does not reflect the escalation.
 
 ---
 
-## 14. Health Monitoring
+## 15. Health Monitoring
 
-> **Current Status:** The backend health service is implemented in PR #14 and is pending merge into `main`.
+The backend provides:
 
-The health endpoint is:
+```text
+GET /api/v1/health
+```
 
-`GET /api/v1/health`
-
-It checks:
+The health service checks:
 
 - API availability
 - application database availability
-- AI provider configuration
+- AI-provider configuration
 
 The health service can report:
 
@@ -294,11 +347,15 @@ The health service can report:
 - `DEGRADED`
 - `UNAVAILABLE`
 
-This provides a simple operational view of backend readiness.
+The application database component reports whether database access is available.
+
+The AI-provider component reports whether the required provider environment variables are configured.
+
+The health endpoint checks AI-provider configuration only. It does not send a live request to the external AI provider.
 
 ---
 
-## 15. Error Handling
+## 16. Error Handling
 
 The backend uses structured HTTP responses for invalid or failed requests.
 
@@ -308,50 +365,74 @@ Examples include:
 - `403 Forbidden`
 - `404 Not Found`
 - `409 Conflict`
+
+The frontend also includes handling for infrastructure-level conditions such as:
+
+- `401 Unauthorized`
 - `429 Too Many Requests`
 - `503 Service Unavailable`
 
-The frontend is responsible for translating these responses into user-facing error behavior.
+The current backend does not implement production authentication or rate limiting.
 
-The final-release frontend also preserves message drafts when possible so that failed sends can be retried.
+The frontend translates API errors into user-facing behavior and preserves message drafts when possible so that failed sends can be retried.
 
 ---
 
-## 16. Authentication and Authorization
+## 17. Authentication and Authorization
 
 The frontend currently includes a prototype authentication flow.
 
 Protected frontend routes require the user to be signed in.
 
-The backend message and escalation workflows also validate that a customer is associated with the requested conversation.
+The prototype stores the customer identifier in browser `localStorage`.
 
-The current authentication approach is suitable for the course project prototype but is not intended to represent a full production identity-management system.
+The backend message and escalation workflows validate that the supplied customer is associated with the requested conversation.
+
+This approach is suitable for the course-project demonstration but is not intended to represent a production identity-management system.
+
+A production system would require stronger authentication, authorization, session management, and security controls.
 
 ---
 
-## 17. CORS and API Routing
+## 18. CORS and API Routing
 
-During local development, the backend currently allows frontend requests from:
+During local development, the backend allows frontend requests from:
 
 - `http://localhost:5173`
 - `http://127.0.0.1:5173`
 
-Production API routing and the final CORS allowlist are still being finalized.
+The allowed origins can be configured using:
 
-This work is tracked separately because development origins should not automatically be treated as production configuration.
+```text
+CORS_ALLOWED_ORIGINS
+```
+
+Multiple origins can be supplied as a comma-separated list.
+
+The frontend backend URL can be configured using:
+
+```text
+VITE_API_BASE_URL
+```
+
+This allows the frontend and backend to be hosted separately without hard-coding production addresses into the application.
+
+Production deployments should use only the intended frontend origins.
 
 ---
 
-## 18. CI/CD Architecture
+## 19. CI Architecture
 
 The repository uses GitHub Actions for automated quality checks.
 
 The frontend workflow includes:
 
+- repository checkout
+- Node.js setup
 - dependency installation
 - linting
 - automated tests
-- coverage thresholds
+- coverage threshold enforcement
 - production build
 - bundle-size validation
 - quality-evidence artifact upload
@@ -359,99 +440,161 @@ The frontend workflow includes:
 
 The backend workflow includes:
 
+- repository checkout
+- Python setup
 - PostgreSQL service initialization
 - dependency installation
 - Python syntax checking
 - automated backend tests
-- PostgreSQL integration tests
+- PostgreSQL integration testing
 - coverage enforcement
 - coverage artifact generation and upload
 
-These workflows provide repeatable evidence that both frontend and backend components continue to pass automated checks.
+These workflows provide repeatable evidence that both frontend and backend components continue to satisfy automated quality checks.
 
 ---
 
-## 19. Current Frontend Quality Evidence
+## 20. Final Frontend Quality Evidence
 
-Current frontend CI results include:
+The final recorded frontend evidence includes:
 
-- 53 frontend tests passing
-- 7 of 7 test files passing
-- 92.41% line coverage
-- 91.42% statement coverage
-- 83.91% branch coverage
-- 97.29% function coverage
-- lint checks passing
-- production build passing
-- bundle-size checks passing
+- **61 tests passing**
+- **7 test files**
+- **90.28% statement coverage**
+- **82.60% branch coverage**
+- **97.41% function coverage**
+- **91.08% line coverage**
+- lint validation
+- production build validation
+- bundle-size validation
 
-The frontend workflow also produces:
+The configured minimum frontend coverage thresholds are:
 
-- a frontend quality-evidence artifact
-- a production-build artifact
+- Statements: 85%
+- Lines: 85%
+- Functions: 80%
+- Branches: 75%
+
+The frontend workflow also produces quality-evidence and production-build artifacts.
 
 ---
 
-## 20. Current Backend Quality Evidence
+## 21. Final Backend Quality Evidence
 
-Current PR #14 backend CI results include:
+The final recorded backend evidence includes:
 
-- 58 backend tests passing
-- 90.37% total backend code coverage
-- 80% minimum backend coverage threshold enforced in CI
+- **66 backend tests passing**
+- **90.93% total backend code coverage**
+- **80% minimum backend coverage threshold enforced by CI**
 - PostgreSQL integration testing
-- Python syntax checking
-- generated coverage XML artifact
+- Python syntax validation
+- coverage reporting through GitHub Actions
 
-These results provide automated evidence for the backend final-release work.
+These results provide automated evidence for the final backend implementation.
 
 ---
 
-## 21. Architecture Component Relationships
+## 22. Performance Measurement
 
-The major relationships can be represented as:
+The project includes a controlled local API benchmark using:
 
-Customer  
-↓  
-React Frontend  
-↓  
-FastAPI API  
-↓  
-Conversation Service  
-↓  
-AI Service  
-↓  
-External AI Provider  
+```text
+scripts/benchmark_api.py
+```
 
-The backend also communicates with:
+The final recorded benchmark on October 5, 2026 produced:
 
-FastAPI API  
-↓  
-Conversation Service  
-↓  
-PostgreSQL  
+- **50 of 50 measured requests successful**
+- **5.97 ms median response time**
+- **6.71 ms 95th-percentile response time**
+- **5.55 ms minimum**
+- **8.87 ms maximum**
+- **110 stored messages including warm-up requests**
 
-FastAPI API  
-↓  
-Escalation Service  
-↓  
-Ticket Persistence  
+The benchmark exercises the FastAPI handler and message persistence using:
 
-FastAPI API  
-↓  
-Feedback Service  
-↓  
-Feedback Persistence  
+- FastAPI's in-process test client
+- an isolated in-memory SQLite database
+- sequential requests at concurrency one
+- a controlled AI response
 
-FastAPI API  
-↓  
-Health Service  
-↓  
+The benchmark excludes:
+
+- browser rendering
+- HTTP network transport
+- PostgreSQL latency
+- live external AI-provider latency
+- concurrent production traffic
+
+The result is therefore an in-process handler baseline and should not be interpreted as a production-capacity or end-user latency measurement.
+
+---
+
+## 23. Architecture Component Relationships
+
+The primary request path can be represented as:
+
+```text
+Customer
+   ↓
+React Frontend
+   ↓
+FastAPI API
+   ↓
+Conversation Service
+   ↓
+AI Service
+   ↓
+External AI Provider
+```
+
+Persistence flows include:
+
+```text
+FastAPI API
+   ↓
+Conversation Service
+   ↓
+PostgreSQL
+```
+
+Escalation flow:
+
+```text
+FastAPI API / AI Processing
+   ↓
+Escalation Service
+   ↓
+Ticket Persistence
+   ↓
+PostgreSQL
+```
+
+Feedback flow:
+
+```text
+React Frontend
+   ↓
+FastAPI API
+   ↓
+Feedback Service
+   ↓
+PostgreSQL
+```
+
+Health flow:
+
+```text
+FastAPI API
+   ↓
+Health Service
+   ↓
 Database and AI Configuration Checks
+```
 
 ---
 
-## 22. Original System Design Components
+## 24. Original System Design Components
 
 The earlier system design specification identified a broader target architecture including:
 
@@ -469,137 +612,148 @@ The earlier system design specification identified a broader target architecture
 - application database
 - existing customer database
 
-The final course implementation focuses on the components necessary for the working MVP and final-release demonstration.
+The final course implementation focuses on the components necessary for the working MVP and final demonstration.
 
 Not every conceptual component from the original design is implemented as a separate production service.
 
 ---
 
-## 23. Implemented Final-Release Scope
+## 25. Implemented Final-Release Scope
 
-The implemented or near-final scope includes:
+The final implemented scope includes:
 
 - React customer-support interface
 - FastAPI backend
 - conversation validation
+- customer ownership validation
 - customer and AI message persistence
+- request-ID duplicate protection
 - AI-provider integration
 - AI response handling
+- AI failure fallback behavior
 - escalation recommendations
 - persistent escalation ticket service
+- frontend escalation state
 - persistent feedback service
+- frontend feedback integration
 - conversation search and filtering
 - draft recovery and retry behavior
+- 35-second frontend request timeout
+- backend health monitoring
+- PostgreSQL persistence
+- PostgreSQL integration testing
 - automated frontend tests
 - automated backend tests
-- PostgreSQL integration testing
 - CI quality gates
-- backend health monitoring
+- production frontend build validation
+- bundle-size validation
+- local API performance benchmarking
 
 ---
 
-## 24. Remaining Integration Work
+## 26. Deployment Status
 
-The following work remains before the final system is considered fully integrated:
+The repository does not currently include a production deployment workflow or a hosted production environment.
 
-- merge the final frontend quality PR
-- merge the backend completion PR
-- connect frontend feedback to persistent backend feedback
-- connect frontend escalation behavior to persistent backend tickets
-- coordinate frontend/backend timeout and retry behavior
-- configure production API routing
-- configure production CORS
-- complete deployment
-- complete final performance benchmarking
-- finalize production documentation
+The architecture is prepared for separate frontend and backend hosting through environment-based configuration.
 
----
+A production deployment would require:
 
-## 25. Deployment Considerations
-
-The final production deployment architecture has not yet been finalized.
-
-Deployment work will need to define:
-
-- frontend hosting location
-- backend hosting location
+- hosted frontend environment
+- hosted FastAPI backend
+- hosted PostgreSQL database
+- production `DATABASE_URL`
 - production API base URL
-- production environment variables
-- database connection configuration
-- AI-provider configuration
-- CORS allowlist
+- AI-provider environment variables
+- secure secrets management
+- production CORS allowlist
 - deployment verification
-- health-check access
-- performance and reliability measurements
+- monitoring and observability
+- authentication and authorization
+- rate limiting
+- scalability and reliability validation
+- rollback procedures
 
-The final documentation will be updated after deployment decisions are completed.
+The current project documents local application behavior, automated CI, integration testing, and performance benchmarking without claiming a completed production deployment.
+
+If a hosted deployment is completed later, this section should be updated with the actual deployment environment and verification evidence.
 
 ---
 
-## 26. Architecture Strengths
+## 27. Architecture Strengths
 
-The current architecture provides several advantages:
+The final architecture provides several advantages:
 
-- separation between frontend and backend responsibilities
+- clear separation between frontend and backend responsibilities
 - service-based backend organization
-- persistent database support
-- independent AI-provider configuration
+- persistent PostgreSQL support
+- configurable AI-provider integration
+- separation between API, AI, persistence, escalation, feedback, and health responsibilities
+- duplicate-request protection
+- frontend retry and draft recovery behavior
 - automated tests across multiple layers
 - CI quality gates
 - explicit handling of escalation and feedback
-- clear distinction between demo behavior and backend-confirmed actions
+- clear distinction between prototype behavior and backend-confirmed actions
+- environment-based deployment configuration
 - ability to extend components independently
 
-These characteristics support maintainability and make the final application easier to evaluate and demonstrate.
+These characteristics support maintainability and make the application easier to test, evaluate, and extend.
 
 ---
 
-## 27. Architecture Limitations
+## 28. Architecture Limitations
 
-The current project remains a course-scale implementation rather than a fully deployed enterprise customer-support platform.
+The project remains a course-scale implementation rather than a fully deployed enterprise customer-support platform.
 
 Current limitations include:
 
 - prototype authentication
-- no completed production deployment yet
-- no completed human-agent dashboard
+- no completed production deployment
+- no live human-agent dashboard
 - no fully integrated production knowledge-base service
-- frontend/backend escalation integration still pending
-- frontend/backend persistent feedback integration still pending
-- production routing and CORS still pending
-- large-scale concurrency has not yet been demonstrated
-- final performance benchmarks are still pending
+- no direct connection between the customer and a live human representative
+- no production authentication or authorization
+- no production rate limiting
+- no production monitoring or observability
+- large-scale concurrency has not been demonstrated
+- benchmark results are local handler measurements rather than production performance measurements
 
 These limitations should be considered when describing the system during the final presentation or written evaluation.
 
 ---
 
-## 28. Final Architecture Validation
+## 29. Final Architecture Validation
 
-The final architecture should be validated through:
+The final architecture is supported by:
 
 - automated frontend tests
 - automated backend tests
 - PostgreSQL integration tests
-- code coverage
-- CI workflow results
-- production build validation
-- bundle-size checks
-- deployment verification
-- health checks
-- API performance benchmarks
-- end-to-end demonstration of the final customer-support workflow
+- backend and frontend code-coverage measurements
+- GitHub Actions CI results
+- frontend production-build validation
+- bundle-size validation
+- health-check functionality
+- controlled API performance benchmarking
+- AI-response demonstration evidence
+- escalation-flow evidence
+- persistent-feedback evidence
+- pull-request and code-review evidence
+- contribution-history evidence
 
-This evidence will be used to show that the final implementation operates consistently with the documented architecture.
+The final evidence demonstrates that the implemented system operates consistently with the documented architecture within the scope of the course-project environment.
+
+Production deployment verification is not currently included because the application has not yet been deployed to a hosted production environment.
 
 ---
 
-## 29. Related Documentation
+## 30. Related Documentation
 
 Additional documentation includes:
 
 - `docs/API.md` for API endpoint details
 - `docs/USER_GUIDE.md` for user workflows
-- `README.md` for project setup and repository information
-
-The README and this architecture document should receive a final cleanup after the remaining final-release pull requests are merged and the deployment configuration is complete.
+- `docs/SECURITY_RISKS_AND_ROADMAP.md` for security limitations and future improvements
+- `docs/evidence/README.md` for final testing, CI, benchmark, review, and application-flow evidence
+- `README.md` for project setup, development instructions, and repository information
