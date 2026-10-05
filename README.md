@@ -751,6 +751,20 @@ Draft pull requests may be used while a feature or integration effort is still u
 
 The project repository includes evidence of pull-request review, requested changes, follow-up commits, approvals, and merges.
 
+## Team Members and Contributions
+
+- **Makida Abebe (`makida-abebe`)** — Led major backend and integration work across the project. Contributions included AI orchestration and external provider integration, AI API integration, chat message handling, backend persistence, health checks, persistent feedback integration, request-ID/idempotency and retry handling, production CORS configuration, benchmarking updates, final API/user guide/architecture documentation, and overall final-release documentation.
+
+- **Julian Chavez (`Juls2Worlds`)** — Contributed to the backend database foundation and PostgreSQL integration testing, helping establish the persistent data layer and validate database behavior.
+
+- **Tyresz Brash (`TyreszB`)** — Developed major customer-facing frontend functionality, including the customer homepage, prototype support pages, and authentication modals. Also contributed to final project evidence updates.
+
+- **Sebastianna Chan (`sebastiannak`)** — Improved frontend chat recovery, feedback behavior, and quality gates, including reliability and user-state handling improvements.
+
+- **Kierra Cunningham (`KierraC4`)** — Improved frontend API reliability and CI coverage and added the security, risks, controls, and future roadmap documentation.
+
+- **Sean Chase (`seanvchase`)** — Added the frontend CI workflow, helping establish automated frontend validation for testing, coverage, build, and quality checks.
+
 ## Security Notes
 
 - **Prototype Authentication:** The current demonstration uses a prototype customer sign-in mechanism that stores the customer ID in browser `localStorage`. This is intended for demonstration purposes only and is not a production authentication implementation.
