@@ -137,20 +137,20 @@ The current architecture documentation reports the following automated quality e
 
 ### Frontend
 
-- 53 frontend tests passing
+- 61 frontend tests passing
 - 7 of 7 test files passing
-- 92.41% line coverage
-- 91.42% statement coverage
-- 83.91% branch coverage
-- 97.29% function coverage
+- 91.08% line coverage
+- 90.28% statement coverage
+- 82.60% branch coverage
+- 97.41% function coverage
 - Lint checks passing
 - Production build passing
 - Bundle-size checks passing
 
 ### Backend
 
-- 58 backend tests passing
-- 90.37% total backend code coverage
+- 66 backend tests passing in CI
+- 90.93% total backend code coverage
 - 80% minimum backend coverage threshold enforced in CI
 - PostgreSQL integration testing
 - Python syntax checking
