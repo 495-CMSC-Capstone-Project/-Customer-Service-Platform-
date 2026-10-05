@@ -1,0 +1,17 @@
+{
+  "method": "FastAPI TestClient, in-process, sequential requests",
+  "database": "isolated in-memory SQLite with real message persistence",
+  "ai_provider": "controlled response; external provider not called",
+  "python": "3.13.5",
+  "platform": "Darwin",
+  "warmups": 5,
+  "measured_requests": 50,
+  "concurrency": 1,
+  "successful_requests": 50,
+  "median_ms": 5.97,
+  "p95_ms": 6.71,
+  "min_ms": 5.55,
+  "max_ms": 8.87,
+  "persisted_messages_including_warmups": 110,
+  "limits": "Excludes browser, HTTP network, PostgreSQL, and live AI latency; not evidence of production scale."
+}
