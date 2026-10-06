@@ -5,7 +5,7 @@
 - **Team repository (base / official team artifact):**  
   `https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-`
 - **Individual fork (enhancements by Sean Davis):**  
-  _Replace this line with your public fork URL after you create it on GitHub._
+  `https://github.com/Seanbyte08/-Customer-Service-Platform-`
 
 The team final release is the shared baseline. This fork adds attributable enhancements on top of that baseline for Unit 8 individual contribution evidence.
 
