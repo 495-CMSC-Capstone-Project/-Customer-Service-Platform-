@@ -250,8 +250,8 @@ Current limitations include:
 - prototype authentication
 - no hosted production deployment
 - no production deployment pipeline
-- no live human-agent dashboard
-- no direct live-agent connection
+- prototype agent review queue only (not a full live-agent workspace)
+- no direct live-agent connection / chat handoff
 - no fully integrated production knowledge-base service
 - no production authentication or authorization
 - no production rate limiting

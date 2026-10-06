@@ -31,6 +31,44 @@ def get_active_escalation(
     return db.scalar(statement)
 
 
+def list_active_escalations(db: Session) -> list[Ticket]:
+    """Return open and in-progress escalation tickets for agent review."""
+    statement = (
+        select(Ticket)
+        .where(
+            Ticket.status.in_((TicketStatus.OPEN, TicketStatus.IN_PROGRESS)),
+        )
+        .order_by(Ticket.created_at.desc())
+    )
+    return list(db.scalars(statement).all())
+
+
+def claim_escalation(db: Session, ticket_id: str) -> Ticket:
+    """
+    Move an OPEN escalation ticket to IN_PROGRESS for agent review.
+
+    This is a course-scale agent-queue action, not a production assignment system.
+    """
+    ticket = db.get(Ticket, ticket_id)
+
+    if ticket is None:
+        raise LookupError("Escalation ticket not found")
+
+    if ticket.status == TicketStatus.IN_PROGRESS:
+        return ticket
+
+    if ticket.status != TicketStatus.OPEN:
+        raise ValueError(
+            "Only open escalation tickets can be claimed for review"
+        )
+
+    ticket.status = TicketStatus.IN_PROGRESS
+    ticket.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+
 def create_escalation(
     db: Session,
     conversation: Conversation,

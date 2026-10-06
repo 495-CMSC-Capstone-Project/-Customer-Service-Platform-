@@ -32,6 +32,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         ) : null}
         <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
       </p>
+      {typeof message.confidence === "number" ? (
+        <div
+          className="confidence-meter"
+          role="meter"
+          aria-label="AI confidence demo score"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(message.confidence * 100)}
+          title="Demonstration confidence score only"
+        >
+          <div
+            className="confidence-meter__fill"
+            style={{ width: `${Math.round(message.confidence * 100)}%` }}
+          />
+        </div>
+      ) : null}
     </article>
   );
 }

@@ -520,6 +520,74 @@ def test_create_escalation_endpoint_returns_conflict(monkeypatch):
     assert response.status_code == 409
 
 
+def test_get_escalation_queue_returns_active_tickets(monkeypatch):
+    ticket = SimpleNamespace(
+        ticket_id="ticket_001",
+        conversation_id="conv_001",
+        reason=SimpleNamespace(value="CUSTOMER_REQUEST"),
+        summary="Customer requested human assistance.",
+        status=SimpleNamespace(value="OPEN"),
+        assigned_queue="General Support",
+        created_at=SimpleNamespace(isoformat=lambda: "2026-10-06T12:00:00+00:00"),
+        updated_at=SimpleNamespace(isoformat=lambda: "2026-10-06T12:00:00+00:00"),
+    )
+    conversation = SimpleNamespace(
+        conversation_id="conv_001",
+        customer_id="cust_001",
+    )
+
+    monkeypatch.setattr(
+        "backend.app.api.list_active_escalations",
+        lambda db: [ticket],
+    )
+    monkeypatch.setattr(
+        "backend.app.api.get_conversation",
+        lambda db, conversation_id: conversation,
+    )
+
+    response = client.get("/api/v1/escalations")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["escalations"][0]["ticketId"] == "ticket_001"
+    assert data["escalations"][0]["customerId"] == "cust_001"
+
+
+def test_claim_escalation_endpoint_returns_updated_status(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.claim_escalation",
+        lambda db, ticket_id: SimpleNamespace(
+            ticket_id=ticket_id,
+            status=SimpleNamespace(value="IN_PROGRESS"),
+            assigned_queue="General Support",
+        ),
+    )
+
+    response = client.post("/api/v1/escalations/ticket_001/claim")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ticketId": "ticket_001",
+        "status": "IN_PROGRESS",
+        "assignedQueue": "General Support",
+    }
+
+
+def test_claim_escalation_endpoint_returns_not_found(monkeypatch):
+    def fake_claim(db, ticket_id):
+        raise LookupError("Escalation ticket not found")
+
+    monkeypatch.setattr(
+        "backend.app.api.claim_escalation",
+        fake_claim,
+    )
+
+    response = client.post("/api/v1/escalations/ticket_missing/claim")
+
+    assert response.status_code == 404
+
+
 def test_feedback_endpoint_records_feedback(monkeypatch):
     conversation = SimpleNamespace(conversation_id="conv_001")
 
