@@ -1,10 +1,8 @@
 # Customer Service Platform User Guide
 
-This guide explains how to use the Customer Service Platform frontend during the final-release development stage.
+This guide explains how to use the Customer Service Platform in its final course-project release.
 
-The application provides an AI-assisted customer support experience with conversation messaging, feedback collection, escalation recommendations, and conversation management.
-
-> **Final Release Note:** Some features are still being integrated across the frontend and backend. This guide distinguishes between functionality that is already available in the interface and functionality that is pending final backend integration.
+The application provides an AI-assisted customer-support experience with conversation messaging, persistent feedback collection, escalation handling, conversation management, retry behavior, and backend health monitoring.
 
 ---
 
@@ -12,7 +10,7 @@ The application provides an AI-assisted customer support experience with convers
 
 The application uses:
 
-- React for the frontend
+- React and TypeScript for the frontend
 - FastAPI for the backend
 - PostgreSQL for persistent backend data
 - an external AI provider for AI-generated support responses
@@ -21,36 +19,63 @@ During local development, the frontend and backend run separately.
 
 The frontend is typically available at:
 
-`http://localhost:5173`
+```text
+http://localhost:5173
+```
 
-The backend API uses the `/api/v1` path prefix.
+The backend is typically available at:
+
+```text
+http://localhost:8000
+```
+
+The backend API uses the following prefix:
+
+```text
+/api/v1
+```
+
+Before using the live application, PostgreSQL, the backend, the frontend, and the required AI-provider environment variables must be configured.
 
 ---
 
 ## 2. Signing In
 
-The frontend includes a sign-in workflow used to access the customer support interface.
+The frontend includes a prototype sign-in workflow used to access the customer-support interface.
+
+For the primary final-project demonstration, the application uses:
+
+```text
+Customer ID: cust_001
+Conversation ID: conv_001
+```
 
 After signing in, the application redirects the user to the requested protected page.
 
-The current authentication flow is part of the application prototype and is not intended to represent a production identity-management system.
+The current authentication flow is intended for the course-project demonstration and is not a production identity-management implementation.
+
+The prototype customer identifier is stored in browser `localStorage`.
 
 ---
 
 ## 3. Opening the Chat Interface
 
-After signing in, the user can access the customer support chat interface.
+After signing in, the user can access the customer-support chat interface.
 
-The chat page displays:
+The chat experience can display:
 
 - the current conversation
 - customer messages
-- AI responses
+- AI-generated responses
 - message status information
-- escalation recommendations when applicable
+- escalation state
 - feedback controls
+- retry information
+- draft message content
 
-The interface is designed to keep the current conversation visible while the user interacts with the AI assistant.
+The frontend communicates with the FastAPI backend through the defined REST API.
+
+It does not directly access PostgreSQL or the external AI provider.
 
 ---
 
@@ -58,175 +83,227 @@ The interface is designed to keep the current conversation visible while the use
 
 To send a message:
 
-1. Enter a support question or request in the message field.
-2. Select the send action.
-3. Wait for the AI response.
-4. Review the AI-generated reply.
+1. Open the desired conversation.
+2. Enter a support question or request in the message field.
+3. Select the send action.
+4. Wait for the backend to process the request.
+5. Review the AI-generated response.
 
-The frontend prevents overlapping sends while a request is already being processed.
+Customer messages must contain between 1 and 2,000 characters.
 
-The backend accepts customer messages between 1 and 2000 characters.
+Whitespace-only messages are rejected.
+
+The frontend disables message submission while a request is already being processed to reduce accidental duplicate sends.
 
 ---
 
-## 5. Message Recovery and Retry Behavior
+## 5. Request ID and Duplicate Protection
 
-The final-release frontend includes message recovery behavior intended to prevent users from losing typed messages when a request fails.
+Each customer-message request includes a `requestId`.
+
+The frontend generates a request ID for a new pending customer message and preserves that same ID when retrying the same message.
+
+The backend uses the `requestId` to reduce duplicate processing.
+
+If the backend has already stored both the customer message and its AI response for the same request ID, it returns the previously stored AI response rather than creating another message pair.
+
+If the customer message has already been stored but the corresponding AI response is not yet available, the backend returns:
+
+```text
+409 Conflict
+```
+
+The frontend can then inform the user that the request is still being processed.
+
+---
+
+## 6. Message Recovery and Retry Behavior
+
+The final-release frontend includes recovery behavior intended to prevent users from losing typed messages when a request fails.
 
 If a message send fails:
 
 - the unsent draft remains available
-- the conversation history is not incorrectly updated
-- the user can retry the request
-- the draft can survive navigation and return to the conversation
-
-A successful response clears only the draft revision that was actually submitted.
+- the draft can be retried
+- the local conversation timestamp is not incorrectly updated
+- the draft can survive in-app navigation and return to the conversation
+- retry-related error state can remain associated with the conversation
 
 The frontend also prevents an older delayed response from overwriting a newer draft entered by the user.
 
-> **Integration Note:** Frontend and backend timeout/retry coordination is still being finalized as part of the remaining final-release integration work.
-
----
-
-## 6. AI Responses
-
-The AI assistant returns a response for each successfully processed customer message.
-
-The interface may display information such as:
-
-- AI-generated response text
-- confidence information
-- whether human review is recommended
-
-The frontend labels demo or browser-only information clearly so that users are not led to believe that unsupported production functionality has occurred.
-
----
-
-## 7. Human Escalation
-
-The system supports escalation when an issue should be reviewed by human support.
-
-Examples include:
-
-- the customer explicitly requesting human assistance
-- low AI confidence
-- an AI provider failure
-
-The final-release backend can create a persistent support ticket and update the conversation status to `ESCALATED`.
-
-The ticket can include:
-
-- a ticket identifier
-- escalation reason
-- issue summary
-- ticket status
-- assigned support queue
-
-> **Current Integration Status:** The backend escalation functionality is implemented in PR #14 and is pending merge and final frontend integration.
-
-Until that integration is complete, the frontend may display that human review is recommended without claiming that a real support agent has already received the request.
-
----
-
-## 8. Providing Feedback
-
-The interface includes feedback functionality for recording whether the support interaction successfully resolved the issue.
-
-Feedback may include:
-
-- resolution type
-- whether the interaction was successful
-- a feedback category
-
-Examples of resolution types include:
-
-- `AI_RESOLVED`
-- `HUMAN_RESOLVED`
-
-The final-release backend supports persistent feedback storage.
-
-> **Current Integration Status:** Persistent backend feedback is implemented in PR #14 and is pending merge and final frontend integration.
-
-Until the integration is complete, some feedback behavior may remain browser-based or demo-only.
-
----
-
-## 9. Conversation Navigation
-
-The frontend allows users to move between conversations while preserving relevant conversation state.
-
-The final-release frontend includes improvements for:
-
-- retaining drafts during navigation
-- restoring pending drafts when returning to a conversation
-- avoiding accidental draft loss
-- preventing draft state from leaking into another conversation
+The frontend uses a 35-second request timeout.
 
 These behaviors are covered by automated frontend tests.
 
 ---
 
-## 10. Conversation Search and Filtering
+## 7. AI Responses
 
-The final-release frontend includes conversation-management controls that help users locate conversations more easily.
+The AI assistant returns a response for each successfully processed customer message.
+
+A response can include:
+
+- AI-generated response text
+- a response source
+- confidence information
+- whether human review is required
+
+The confidence value is a demonstration score and should not be interpreted as a calibrated probability that the AI response is correct.
+
+If the external AI provider fails, the backend can return fallback content with:
+
+```text
+confidence: 0.0
+escalated: true
+```
+
+The conversation can then be marked for human review.
+
+---
+
+## 8. Human Escalation
+
+The system supports persistent escalation when an issue requires human review.
+
+Examples include:
+
+- the customer explicitly requesting human assistance
+- low AI confidence
+- an AI-provider failure
+- another complex support issue
+
+Supported escalation reasons include:
+
+- `LOW_CONFIDENCE`
+- `COMPLEX_ISSUE`
+- `CUSTOMER_REQUEST`
+- `AI_FAILURE`
+
+When escalation is created, the backend:
+
+1. verifies the conversation and customer relationship;
+2. checks whether an active escalation already exists;
+3. creates a persistent support ticket when needed;
+4. sets the ticket status to `OPEN`;
+5. assigns the default `General Support` queue;
+6. updates the conversation status to `ESCALATED`.
+
+The application does not currently connect the customer directly to a live human representative.
+
+The frontend therefore displays the appropriate human-review state without claiming that a real support agent has already joined the conversation.
+
+---
+
+## 9. Providing Feedback
+
+The application supports persistent final feedback for the live support conversation.
+
+Feedback includes:
+
+- resolution type
+- whether the interaction was successful
+- a feedback category
+
+Supported resolution types include:
+
+- `AI_RESOLVED`
+- `HUMAN_RESOLVED`
+
+Only one final feedback record is stored for each conversation.
+
+If final feedback has already been recorded, another submission returns:
+
+```text
+409 Conflict
+```
+
+The frontend displays success after a completed feedback submission and handles duplicate-feedback responses appropriately.
+
+---
+
+## 10. Conversation Navigation
+
+The frontend allows users to move between conversations while keeping relevant conversation state separated.
+
+The final-release frontend supports:
+
+- retaining drafts during navigation
+- restoring pending drafts when returning to a conversation
+- keeping drafts associated with the correct conversation
+- avoiding accidental draft loss
+- preventing one conversation's state from leaking into another
+
+These behaviors are covered by automated frontend tests.
+
+---
+
+## 11. Conversation Search, Filtering, and Sorting
+
+The frontend includes conversation-management controls to help users locate conversations.
 
 Available behavior includes:
 
 - searching conversations
-- filtering conversations
+- filtering by status
 - sorting conversation results
-- displaying result counts and conversation totals
+- displaying result counts
+- displaying sample conversation details
 
-These controls are intended to make the conversation list easier to manage as the number of conversations grows.
-
----
-
-## 11. Feedback and Escalation Status
-
-The user interface distinguishes between:
-
-- actions that are completed by the backend
-- recommendations generated by the AI
-- browser-only or demo behavior
-
-For example, the interface uses wording such as:
-
-`Human review recommended`
-
-when escalation is recommended but a confirmed support-agent connection has not yet occurred.
-
-This avoids representing a recommendation as a completed support action.
+These controls make the conversation list easier to manage as the number of conversations grows.
 
 ---
 
-## 12. Error Handling
+## 12. Escalation and Feedback Status
 
-The application provides user-facing error handling for common API failures.
+The interface distinguishes between:
 
-Possible backend responses include:
+- backend-confirmed actions
+- AI recommendations
+- prototype or demonstration behavior
+
+When the backend confirms escalation, the conversation can display the appropriate escalated or human-review state.
+
+The application still does not directly connect the customer with a live human representative.
+
+This distinction prevents the interface from presenting a recommendation as a completed human-support interaction.
+
+---
+
+## 13. Error Handling
+
+The application provides user-facing handling for common API conditions.
+
+Possible responses include:
 
 - `400 Bad Request` for invalid request data
+- `401 Unauthorized` when infrastructure requires authorization
 - `403 Forbidden` when the customer does not own the conversation
 - `404 Not Found` when a conversation does not exist
-- `409 Conflict` for duplicate escalation or feedback operations
-- `429 Too Many Requests` when a service rate limit is reached
+- `409 Conflict` for an in-progress duplicate message request, duplicate escalation, or duplicate feedback
+- `429 Too Many Requests` when infrastructure applies rate limiting
 - `503 Service Unavailable` when a required service is unavailable
+
+The current backend does not implement production authentication or rate limiting, but the frontend includes handling for those infrastructure-level response conditions.
 
 When a send operation fails, the frontend preserves the user's draft when possible so the message can be retried.
 
+Unexpected failures are shown through a general fallback message.
+
 ---
 
-## 13. Backend Health Monitoring
+## 14. Backend Health Monitoring
 
-The final-release backend includes a health endpoint:
+The backend includes the following health endpoint:
 
-`GET /api/v1/health`
+```text
+GET /api/v1/health
+```
 
 The health check reports:
 
 - API availability
 - application database availability
-- AI provider configuration status
+- AI-provider configuration status
 - overall backend health
 
 Possible overall health states include:
@@ -235,78 +312,170 @@ Possible overall health states include:
 - `DEGRADED`
 - `UNAVAILABLE`
 
-> **Current Integration Status:** The health endpoint is implemented in PR #14 and is pending merge into `main`.
+The AI-provider health value indicates whether the required AI environment variables are configured.
+
+The health endpoint does not send a live request to the external AI provider.
 
 ---
 
-## 14. Current Quality Evidence
+## 15. Current Quality Evidence
 
-The application includes automated frontend and backend quality checks.
+The final application includes automated frontend and backend quality checks.
 
-Current frontend CI results include:
+The final recorded frontend evidence includes:
 
-- 53 frontend tests passing
-- 7 of 7 frontend test files passing
-- 92.41% line coverage
-- 91.42% statement coverage
-- 83.91% branch coverage
-- 97.29% function coverage
-- lint checks passing
-- production build passing
-- frontend bundle-size checks passing
+- **61 tests passing**
+- **7 test files**
+- **90.28% statement coverage**
+- **82.60% branch coverage**
+- **97.41% function coverage**
+- **91.08% line coverage**
+- lint validation
+- production build validation
+- bundle-size validation
 
-Current backend PR #14 CI results include:
+The configured frontend coverage thresholds are:
 
-- 58 backend tests passing
-- 90.37% total backend code coverage
-- 80% minimum backend coverage threshold enforced in CI
+- Statements: 85%
+- Lines: 85%
+- Functions: 80%
+- Branches: 75%
+
+The final recorded backend evidence includes:
+
+- **66 backend tests passing**
+- **90.93% total backend code coverage**
+- **80% minimum backend coverage threshold enforced by CI**
 - PostgreSQL integration testing
-- generated coverage artifact
+- Python syntax validation
+- coverage reporting through GitHub Actions
 
-These metrics provide evidence that the final-release application is being tested across both frontend and backend components.
+Final CI, testing, coverage, benchmark, code-review, contribution, AI-flow, escalation, and feedback evidence is available in:
 
----
-
-## 15. Known Final-Release Limitations
-
-The following items are still being completed before the project is considered fully integrated:
-
-- connect frontend feedback to the persistent backend feedback API
-- connect frontend escalation behavior to persistent backend escalation tickets
-- coordinate frontend and backend timeout/retry behavior
-- configure production API routing
-- configure the production CORS allowlist
-- complete deployment
-- complete performance benchmarking
-- finalize production documentation
-
-These limitations are documented so that the current application is not represented as more complete than it actually is.
+```text
+docs/evidence/
+```
 
 ---
 
-## 16. Recommended Demo Workflow
+## 16. Performance Measurement
 
-For the final project demonstration, the following workflow can be used once final integration is complete:
+The project includes a controlled local API benchmark.
 
-1. Sign in to the application.
-2. Open a conversation.
-3. Send a normal customer support message.
-4. Display the AI-generated response.
-5. Demonstrate message recovery or retry behavior.
-6. Demonstrate a conversation that requires human escalation.
-7. Show the escalation status or ticket information.
-8. Submit conversation feedback.
-9. Demonstrate conversation search or filtering.
-10. Show the automated test and quality metrics used to validate the application.
+The final recorded benchmark on October 5, 2026 produced:
+
+- **50 of 50 measured requests successful**
+- **5.97 ms median response time**
+- **6.71 ms 95th-percentile response time**
+- **5.55 ms minimum**
+- **8.87 ms maximum**
+- **110 stored messages including warm-up requests**
+
+The benchmark uses:
+
+- FastAPI's in-process test client
+- an isolated in-memory SQLite database
+- sequential requests at concurrency one
+- a controlled AI response
+
+It does not measure:
+
+- browser rendering
+- network latency
+- PostgreSQL latency
+- live external AI-provider latency
+- concurrent production traffic
+
+The results are therefore a local handler baseline rather than a production performance measurement.
 
 ---
 
-## 17. Additional Documentation
+## 17. Deployment Status
+
+The application is not currently deployed to a hosted production environment.
+
+The project currently demonstrates:
+
+- local frontend and backend operation
+- PostgreSQL integration
+- external AI-provider integration
+- automated CI
+- frontend and backend testing
+- code coverage
+- production frontend build validation
+- performance benchmarking
+
+The architecture supports future separate frontend and backend hosting through configurable environment variables such as:
+
+```text
+VITE_API_BASE_URL
+CORS_ALLOWED_ORIGINS
+DATABASE_URL
+AI_API_URL
+AI_API_KEY
+AI_MODEL
+```
+
+A hosted production deployment would still require deployment verification, secure secrets management, production authentication and authorization, monitoring, rate limiting, and additional scalability and reliability validation.
+
+If the application is deployed later, this section should be updated with the live environment and deployment evidence.
+
+---
+
+## 18. Current Limitations
+
+The final course-project release is a functional software-engineering demonstration rather than a production customer-support service.
+
+Current limitations include:
+
+- prototype authentication
+- no hosted production deployment
+- no live human-agent dashboard
+- no direct live-agent connection
+- no production authentication or authorization
+- no production rate limiting
+- no production monitoring or observability
+- no fully integrated production knowledge-base service
+- no large-scale concurrency validation
+
+These limitations should be considered when demonstrating or describing the system.
+
+---
+
+## 19. Recommended Demo Workflow
+
+For the final project demonstration:
+
+1. Start PostgreSQL.
+2. Start the FastAPI backend.
+3. Start the React frontend.
+4. Sign in using the demo customer identifier.
+5. Open the primary live conversation.
+6. Send a normal customer-support message.
+7. Show the AI-generated response.
+8. Demonstrate draft recovery or retry behavior if desired.
+9. Show a conversation that requires human review.
+10. Show the escalation state or persisted ticket evidence.
+11. Submit final conversation feedback.
+12. Demonstrate conversation search, filtering, or sorting.
+13. Show the backend health endpoint if relevant.
+14. Show automated test, coverage, CI, and performance evidence.
+
+The primary demonstration uses:
+
+```text
+Customer ID: cust_001
+Conversation ID: conv_001
+```
+
+---
+
+## 20. Additional Documentation
 
 Additional project documentation is available in:
 
 - `docs/API.md` for backend API details
-- `README.md` for project setup and repository information
-- final architecture documentation for system structure and component interactions
-
-The README and architecture documentation will be finalized after the remaining final-release pull requests and integration work are completed.
+- `docs/ARCHITECTURE.md` for system structure and component interactions
+- `docs/SECURITY_RISKS_AND_ROADMAP.md` for security limitations and future improvements
+- `docs/evidence/README.md` for final testing, CI, benchmark, review, and application-flow evidence
+- `README.md` for setup, development instructions, and repository information

@@ -2,33 +2,40 @@
 
 ## Project Overview
 
-The Customer Service Platform gives customers an AI-assisted first response to
-support questions and indicates when an issue may need a person. The current
-demo displays that recommendation; it does not connect to a human agent.
+The Customer Service Platform gives customers an AI-assisted first response to support questions while identifying when a conversation may require human review.
 
-The Alpha release integrates a React and TypeScript customer interface with a FastAPI backend. The backend manages conversations and messages, communicates with an external AI provider, and uses PostgreSQL for application data.
+The final course-project release integrates a React and TypeScript customer interface with a FastAPI backend. The backend manages conversations and messages, communicates with an external AI provider, persists escalation and feedback records, provides health monitoring, and uses PostgreSQL for application data.
 
-The system is designed around a modular architecture so that the frontend, backend services, database, and AI provider can be developed and tested independently while communicating through defined interfaces.
+The system uses a modular architecture so that the frontend, backend services, database, and AI provider can be developed and tested independently while communicating through defined interfaces.
 
-## Alpha Features
+The platform can create and persist escalation records when a conversation requires human review. The current demonstration does not directly connect the customer to a live human representative.
 
-The current Alpha implementation includes:
+## Final Release Features
+
+The final implementation includes:
 
 - Customer support message entry through a React web interface
 - Frontend-to-backend communication through a REST API
 - Message validation
+- Request ID handling for duplicate-message protection
 - Conversation ownership validation
 - AI response generation through an external AI provider
 - AI confidence information
-- Escalation indication for requests requiring human assistance
-- Conversation search, status filters, sorting, and clearly labelled sample ticket details
-- Draft recovery, retry controls, and local feedback that does not close a live conversation
+- Persistent escalation handling for conversations requiring human review
+- Persistent resolution feedback for live support conversations
+- Backend health-check service
+- Conversation search, status filters, sorting, and sample conversation details
+- Draft recovery and retry controls
 - Customer and AI message persistence
 - PostgreSQL database integration
-- Error handling for invalid requests and unavailable services
-- Automated backend tests
-- Automated frontend API tests, linting, and build validation
+- Error handling for invalid requests, duplicate/in-progress operations, and unavailable services
+- Automated backend unit and API tests
+- PostgreSQL integration testing
+- Automated frontend tests and coverage enforcement
+- Frontend linting and production build validation
+- Frontend bundle-size validation
 - GitHub Actions CI workflows
+- Code-review and project evidence documentation
 
 ## Technology Stack
 
@@ -37,6 +44,7 @@ The current Alpha implementation includes:
 - React 19
 - TypeScript
 - Vite
+- Vitest
 - Oxlint
 
 ### Backend
@@ -56,9 +64,14 @@ The current Alpha implementation includes:
 ### Testing and CI/CD
 
 - Pytest
+- pytest-cov
+- Vitest
 - GitHub Actions
-- Frontend API tests, lint, and build checks
+- Frontend coverage enforcement
+- Frontend lint and build checks
+- Frontend bundle-size validation
 - Backend automated tests
+- PostgreSQL integration testing
 
 ## Repository Structure
 
@@ -66,6 +79,8 @@ The current Alpha implementation includes:
 Customer-Service-Platform/
 ├── .github/
 │   └── workflows/
+│       ├── backend-tests.yml
+│       └── frontend-ci.yml
 │
 ├── backend/
 │   ├── app/
@@ -75,6 +90,9 @@ Customer-Service-Platform/
 │   │   ├── api.py
 │   │   ├── conversation_service.py
 │   │   ├── database.py
+│   │   ├── escalation_service.py
+│   │   ├── feedback_service.py
+│   │   ├── health_service.py
 │   │   ├── models.py
 │   │   └── seed.py
 │   │
@@ -82,18 +100,39 @@ Customer-Service-Platform/
 │   ├── __init__.py
 │   └── requirements.txt
 │
+├── docs/
+│   ├── evidence/
+│   │   ├── README.md
+│   │   ├── ai-flow.png
+│   │   ├── backend-pytest.txt
+│   │   ├── backend-test-coverage.png
+│   │   ├── benchmark.json
+│   │   ├── ci-backend-tests.png
+│   │   ├── ci-frontend-tests.png
+│   │   ├── contribution-evidence.png
+│   │   ├── escalation-flow.png
+│   │   ├── feedback-flow.png
+│   │   ├── frontend-coverage.txt
+│   │   ├── frontend-test-coverage.png
+│   │   ├── performance-benchmark.png
+│   │   └── pr-code-review.png
+│   ├── API.md
+│   ├── ARCHITECTURE.md
+│   ├── SECURITY_RISKS_AND_ROADMAP.md
+│   └── USER_GUIDE.md
+│
 ├── frontend/
 │   ├── public/
+│   ├── scripts/
 │   ├── src/
-│   │   ├── assets/
-│   │   ├── App.tsx
-│   │   ├── index.css
-│   │   └── main.tsx
-│   │
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── tsconfig.json
-│   └── vite.config.ts
+│   ├── vite.config.ts
+│   └── vitest.config.ts
+│
+├── scripts/
+│   └── benchmark_api.py
 │
 ├── .gitignore
 └── README.md
@@ -103,10 +142,10 @@ Customer-Service-Platform/
 
 Before running the application locally, install:
 
-- Python 3.12, as used by backend CI
+- Python 3.12 or a compatible supported Python version
 - Node.js 22 and npm, as used by frontend CI
 - PostgreSQL
-- Git
+- Git, if working with a cloned repository
 
 A compatible external AI provider is also required for live AI responses.
 
@@ -118,13 +157,13 @@ From the repository root, create a Python virtual environment:
 py -m venv .venv
 ```
 
-On Windows PowerShell, you can activate it with:
+On Windows PowerShell, activate it with:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks script activation, you can use the virtual environment's Python executable directly instead.
+If PowerShell blocks script activation, the virtual environment's Python executable can be used directly.
 
 Install the backend dependencies:
 
@@ -132,7 +171,7 @@ Install the backend dependencies:
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-The backend currently uses the following Python packages:
+The backend uses packages including:
 
 ```text
 fastapi
@@ -172,7 +211,7 @@ Use credentials appropriate for your local PostgreSQL installation.
 
 ### Seed Demo Data
 
-The Alpha uses a demo conversation for integration testing.
+The application uses a demo conversation for integration testing and the live demonstration.
 
 After PostgreSQL is configured, run:
 
@@ -211,7 +250,7 @@ Do not commit API keys or other secrets to the repository.
 
 The current integration expects an OpenAI-compatible chat response format.
 
-For Alpha integration testing, Groq was used successfully with:
+During integration testing, Groq was used successfully with:
 
 ```text
 AI_API_URL=https://api.groq.com/openai/v1/chat/completions
@@ -237,7 +276,9 @@ The backend will normally be available at:
 http://localhost:8000
 ```
 
-The Alpha customer-message endpoint is:
+## API Endpoints
+
+The primary customer-message endpoint is:
 
 ```text
 POST /api/v1/conversations/{conversationId}/messages
@@ -254,6 +295,7 @@ Example request body:
 ```json
 {
   "customerId": "cust_001",
+  "requestId": "req_example_001",
   "message": "I need help with my account."
 }
 ```
@@ -271,33 +313,57 @@ A successful response follows this structure:
 }
 ```
 
+Additional backend endpoints include:
+
+```text
+POST /api/v1/escalations
+POST /api/v1/conversations/{conversationId}/feedback
+GET  /api/v1/health
+```
+
 ### API Contract
 
-FastAPI serves interactive API documentation at `http://localhost:8000/docs`
-and the generated schema at `http://localhost:8000/openapi.json`.
+FastAPI serves interactive API documentation at:
+
+```text
+http://localhost:8000/docs
+```
+
+and the generated OpenAPI schema at:
+
+```text
+http://localhost:8000/openapi.json
+```
 
 | Field | Type | Rule |
 | --- | --- | --- |
 | `conversationId` in the path | string | Required; must identify a stored conversation. |
 | `customerId` in the request | string | Required and nonempty; must match that conversation's customer. This is a demo identifier, not authenticated identity. |
-| `message` in the request | string | 1–2,000 characters; the AI service rejects whitespace-only messages. |
+| `requestId` in the request | string | Required, 1–64 characters; used to identify repeated message submissions. |
+| `message` in the request | string | 1–2,000 characters; whitespace-only messages are rejected. |
 | `conversationId` in the response | string | Must match the requested conversation. |
 | `messageId` in the response | string | ID of the saved assistant message. |
-| `response` | string | Assistant text, including a fallback if the provider is unavailable. |
-| `source` | string | Currently `AI` from this endpoint; the frontend also accepts `HUMAN`. |
-| `confidence` | number | 0–1; a preset demo score, not measured answer accuracy. |
-| `escalated` | boolean | Indicates recommended human review; does not confirm a ticket or assignment. |
+| `response` | string | Assistant text, including fallback text if the provider is unavailable. |
+| `source` | string | Currently `AI` from the message endpoint; the frontend also accepts `HUMAN`. |
+| `confidence` | number | 0–1; a demonstration score, not measured answer accuracy. |
+| `escalated` | boolean | Indicates that the conversation requires or has entered human-review escalation. |
 
-The endpoint returns `400` for request validation, `403` for a mismatched
-customer ID, and `404` for a missing conversation. Provider failures currently
-return `200` with fallback text, confidence `0.0`, and `escalated: true`.
-The frontend also handles `401`, `429`, and `503` if infrastructure returns them;
-the current backend does not implement authentication or rate limiting.
+The customer-message endpoint returns:
 
-Customer and assistant messages are committed separately. A failure after the
-first write may leave a customer message stored without its reply. Neither the
-input remaining in the browser nor a timeout proves that the server saved
-nothing. The API has no idempotency key or history-reconciliation endpoint yet.
+- `400` for invalid request data
+- `403` for a mismatched customer ID
+- `404` for a missing conversation
+- `409` when an earlier request with the same request ID has stored the customer message but its AI response is still incomplete
+
+If both the customer message and AI response already exist for the same `requestId`, the backend returns the previously stored AI response instead of creating another message pair. This reduces duplicate processing during retries.
+
+Provider failures currently return a successful API response with fallback text, confidence `0.0`, and `escalated: true`.
+
+The escalation endpoint can return `409` when an active escalation already exists for a conversation.
+
+The feedback endpoint can return `409` when final feedback has already been recorded for a conversation.
+
+The frontend also handles `401`, `429`, and `503` responses if infrastructure returns them. The current backend does not implement production authentication or rate limiting.
 
 ## Frontend Setup
 
@@ -337,11 +403,9 @@ The frontend will normally be available at:
 http://localhost:5173
 ```
 
-The frontend sends customer messages to the FastAPI backend at:
+The frontend sends customer messages and feedback requests to the FastAPI backend.
 
-```text
-http://localhost:8000
-```
+When `VITE_API_BASE_URL` is not configured for local development, the frontend uses relative API paths or the local development configuration.
 
 ## Frontend Commands
 
@@ -363,8 +427,7 @@ Run frontend unit tests:
 npm test
 ```
 
-Run frontend tests with enforced coverage thresholds and generate the HTML and
-JSON coverage reports:
+Run frontend tests with enforced coverage thresholds and generate coverage reports:
 
 ```bash
 npm run test:coverage
@@ -376,8 +439,7 @@ Build the frontend:
 npm run build
 ```
 
-After building, verify that the production JavaScript and CSS bundles remain
-within the documented gzip-size budgets:
+After building, verify that the production JavaScript and CSS bundles remain within the documented gzip-size budgets:
 
 ```bash
 npm run check:bundle-size
@@ -389,9 +451,9 @@ Preview the production build:
 npm run preview
 ```
 
-## Running the Full Alpha Application
+## Running the Full Application
 
-To run the Alpha application end to end:
+To run the application end to end:
 
 1. Start PostgreSQL.
 2. Configure `DATABASE_URL`.
@@ -400,11 +462,15 @@ To run the Alpha application end to end:
 5. Start the FastAPI backend.
 6. Start the React frontend.
 7. Open the frontend in a browser at `http://localhost:5173`.
-8. Submit a customer support message.
-9. Confirm that the AI response is returned and displayed.
-10. Confirm that customer and AI messages are persisted in PostgreSQL.
+8. Sign in using the demo customer ID.
+9. Open the live demo conversation.
+10. Submit a customer support message.
+11. Confirm that the AI response is returned and displayed.
+12. Confirm that customer and AI messages are persisted.
+13. Trigger an escalation when human review is needed.
+14. Submit resolution feedback and confirm it is recorded.
 
-The frontend currently uses the demo values:
+The primary live demonstration uses:
 
 ```text
 Conversation ID: conv_001
@@ -416,23 +482,22 @@ Customer ID: cust_001
 The frontend provides user-facing handling for several API conditions, including:
 
 - `400` - Invalid request
+- `401` - Session not authorized
 - `403` - Customer does not have access to the conversation
 - `404` - Conversation not found
+- `409` - Duplicate/in-progress message request or duplicate feedback
 - `429` - Too many requests
 - `503` - Service temporarily unavailable
 
-Unexpected service errors are also handled through a general fallback message.
+Unexpected service errors are handled through a general fallback message.
 
-Successful API responses are checked for required fields and the expected
-conversation ID before being added to the visible history. The 20-second timeout
-covers both the request and reading its response body. Failed sends keep the
-draft available for manual retry and do not update the local conversation timestamp.
-Drafts and retry errors survive in-app navigation. Successful responses clear only
-the matching submitted draft revision, including when the chat page was unmounted.
-Timeouts cannot prove whether the backend saved a message; the API does not
-currently provide idempotency keys, so retries are not an exactly-once guarantee.
+Successful API responses are checked for required fields and the expected conversation ID before being added to visible history.
 
-The interface disables message submission while a request is being processed to help prevent duplicate submissions.
+The frontend uses a 35-second request timeout. Failed sends keep the draft available for retry and do not update the local conversation timestamp. Drafts and retry errors survive in-app navigation.
+
+The frontend retains the same `requestId` when retrying the same pending customer message. The backend uses that identifier to reduce duplicate processing. If both the previously stored customer message and AI reply are available, the stored AI response is returned. If the customer message exists but processing has not completed, the backend returns `409` so the frontend can ask the user to wait before retrying.
+
+The interface disables message submission while a request is being processed to further reduce accidental duplicate submissions.
 
 ## Testing
 
@@ -450,17 +515,32 @@ Backend tests cover areas including:
 - External AI provider handling
 - Database models
 - Conversation service behavior
+- Request ID handling
 - API validation
 - Conversation ownership
 - Message-length boundaries
+- Escalation service behavior
+- Feedback persistence and duplicate protection
+- Health service behavior
 - Successful and failed API responses
+- PostgreSQL integration
 
-Some database unit tests use an in-memory SQLite database so that automated tests do not require a running PostgreSQL instance.
+Some backend unit tests use an in-memory SQLite database so that every unit test does not require a running PostgreSQL instance.
 
-To include the PostgreSQL integration test, point `TEST_DATABASE_URL` at a
-separate test database. That test creates tables and writes temporary rows,
-then removes its own rows. Backend CI uses its own
-PostgreSQL service and passed all 34 tests for application commit `dee9bff`.
+To include the PostgreSQL integration test, point `TEST_DATABASE_URL` at a separate test database. The integration test creates required tables, writes temporary rows, and removes its test data.
+
+The final recorded backend test evidence contains:
+
+- **66 passing tests**
+- **90.93% overall backend coverage**
+- **80% minimum CI coverage gate**
+- PostgreSQL integration testing
+
+The backend GitHub Actions workflow runs on `ubuntu-latest`, starts a PostgreSQL service, checks Python syntax, runs the backend tests with coverage, and uploads the coverage report.
+
+Final testing evidence is available in:
+
+[docs/evidence/README.md](docs/evidence/README.md)
 
 ### Frontend Validation
 
@@ -473,20 +553,38 @@ npm run build
 npm run check:bundle-size
 ```
 
-The frontend suite contains 53 tests across seven files, including 24 App-level
-workflow tests using real React pages and providers with mocked network responses.
-The coverage scope includes the API client, composer, authentication state and
-dialog, support state, chat, feedback, conversation list, and support helpers.
-The verified local baseline on October 1, 2026 is 92.41% lines, 91.42% statements,
-83.91% branches, and 97.29% functions. These are scoped coverage figures, not
-whole-application coverage or a live-provider end-to-end test.
-The bundle check records 84,613 bytes (82.63 KiB) of JavaScript gzip size against
-a 100 KiB budget and 3,195 bytes (3.12 KiB) of CSS against a 25 KiB budget.
+The final recorded frontend suite contains:
 
-See [the frontend guide](frontend/README.md) for customer workflows, recovery
-behavior, and the boundary between live API functionality and local demo data.
+- **61 passing tests**
+- **7 test files**
+- **90.28% statement coverage**
+- **82.60% branch coverage**
+- **97.41% function coverage**
+- **91.08% line coverage**
 
-### Local API Measurement
+The configured minimum frontend coverage thresholds are:
+
+- Statements: 85%
+- Lines: 85%
+- Functions: 80%
+- Branches: 75%
+
+The coverage scope includes the API client, authentication state and dialog, support state, chat, feedback, conversation filtering, conversation pages, and support helpers.
+
+These are scoped frontend coverage figures and should not be interpreted as whole-system coverage or as a live-provider end-to-end performance measurement.
+
+The frontend CI workflow also verifies:
+
+- Oxlint
+- Coverage thresholds
+- TypeScript/Vite production build
+- Production JavaScript and CSS bundle-size limits
+- Upload of frontend quality evidence
+- Upload of the production build artifact
+
+See the [frontend guide](frontend/README.md) for additional frontend behavior and development information.
+
+## Local API Performance Measurement
 
 From the repository root, using the backend environment:
 
@@ -494,52 +592,101 @@ From the repository root, using the backend environment:
 .\.venv\Scripts\python.exe scripts\benchmark_api.py
 ```
 
-This script exercises the FastAPI handler and real message persistence in an
-isolated in-memory SQLite database. It replaces the external AI response with
-a fixed test answer. It never connects to your configured application database.
-After five warm-up requests, it measures 50 sequential requests at concurrency
-one and checks that both messages from every request were stored.
+The benchmark exercises the FastAPI handler and real message persistence in an isolated in-memory SQLite database. The external AI provider is replaced with a controlled response so that provider/network latency does not affect the handler baseline.
 
-On October 1, 2026, Windows with Python 3.12.14 produced 50/50 successful measured
-requests, a 4.55 ms median, and a 5.71 ms 95th percentile. Including warm-ups,
-110 message rows were stored. Repeat runs will vary with the machine and load.
-These figures exclude browser rendering, HTTP network transport, PostgreSQL,
-and live AI provider latency. They are a local handler baseline, not a capacity
-claim or a measure of end-user waiting time.
+The benchmark performs five warm-up requests followed by 50 sequential measured requests at concurrency one.
+
+The final recorded benchmark on October 5, 2026 used Python 3.13.5 and produced:
+
+- **50 of 50 measured requests successful**
+- **5.97 ms median response time**
+- **6.71 ms 95th-percentile response time**
+- **5.55 ms minimum**
+- **8.87 ms maximum**
+- **110 stored messages including warm-up requests**
+
+Repeat runs will vary with the machine and system load.
+
+These figures exclude:
+
+- Browser rendering
+- HTTP network transport
+- PostgreSQL latency
+- Live external AI-provider latency
+- Concurrent production traffic
+
+The result is therefore an in-process handler baseline and is not a claim of production-scale capacity or end-user response time.
+
+The raw benchmark data and screenshot are available in:
+
+[docs/evidence/README.md](docs/evidence/README.md)
 
 ## CI/CD
 
 GitHub Actions is used to automatically validate project changes.
 
-The current CI process includes:
+The backend CI process includes:
 
-- Backend automated tests
-- Frontend Oxlint checks
-- Frontend API unit tests
-- Frontend component and support-helper tests
-- Enforced frontend coverage thresholds
-- Frontend TypeScript/Vite build validation
-- Frontend production bundle size budgets
-- Downloadable coverage, quality-metric, and production-build artifacts
+- Repository checkout
+- Python setup
+- PostgreSQL service startup
+- Backend dependency installation
+- Python syntax validation
+- Backend unit/API testing
+- PostgreSQL integration testing
+- 80% minimum backend coverage enforcement
+- Coverage report upload
+
+The frontend CI process includes:
+
+- Repository checkout
+- Node.js setup
+- Dependency installation
+- Oxlint
+- Frontend tests
+- Coverage threshold enforcement
+- TypeScript/Vite production build
+- Production bundle-size validation
+- Quality-evidence artifact upload
+- Production-build artifact upload
 
 Pull requests should have successful CI checks before they are merged into `main`.
 
-Feature branches are reviewed through pull requests before their completed work is incorporated into the main branch.
+Feature branches are reviewed through pull requests before completed work is incorporated into the main branch.
 
-For the evaluated application commit `dee9bff`, the successful workflow records
-are [Frontend CI](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/actions/runs/36818819775)
-and [Backend Database Tests](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/actions/runs/36818819768).
-The frontend run includes coverage and build artifacts. Those files document a
-successful build; they do not establish that the application is deployed.
+Final project evidence is stored in:
 
-### Deployment Requirements
+[docs/evidence/](docs/evidence/)
 
-For a separately hosted frontend, this project uses an explicit backend CORS allowlist. Configure the frontend with `VITE_API_BASE_URL` pointing to the deployed backend, and configure the backend with `CORS_ALLOWED_ORIGINS` containing the exact deployed frontend origin or origins.
+The evidence package includes:
 
-Example configuration format:
+- Backend CI evidence
+- Frontend CI evidence
+- Backend test and coverage results
+- Frontend test and coverage results
+- Raw local test output
+- Performance benchmark data
+- Pull-request and code-review evidence
+- Contribution history evidence
+- AI-response flow evidence
+- Escalation-flow evidence
+- Persistent-feedback evidence
+
+The evidence files document successful CI and local application behavior. They do not represent a production deployment.
+
+## Deployment Requirements
+
+For a separately hosted frontend, this project uses an explicit backend CORS allowlist.
+
+Configure the frontend with:
 
 ```text
 VITE_API_BASE_URL=<backend-base-url>
+```
+
+Configure the backend with:
+
+```text
 CORS_ALLOWED_ORIGINS=<frontend-origin>
 ```
 
@@ -549,13 +696,32 @@ Multiple frontend origins can be supplied as a comma-separated list:
 CORS_ALLOWED_ORIGINS=<frontend-origin-1>,<frontend-origin-2>
 ```
 
-When `CORS_ALLOWED_ORIGINS` is not set, the backend defaults to the local Vite development origins `http://localhost:5173` and `http://127.0.0.1:5173`.
+When `CORS_ALLOWED_ORIGINS` is not set, the backend defaults to the local Vite development origins:
 
-Production deployments should use only the intended frontend origins. Do not use a wildcard (`*`) as a substitute for configuring the actual deployed origins. Setting `VITE_API_BASE_URL` alone does not authorize cross-origin browser requests; the frontend origin must also be allowed by the backend.
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+```
 
-The frontend's request timeout is 20 seconds; the AI provider timeout is 30 seconds. Timeout coordination and ambiguous retry behavior are tracked in [issue 12](https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-/issues/12).
+Production deployments should use only the intended frontend origins. A wildcard (`*`) should not be used as a substitute for configuring the actual deployed origins.
 
-This checkout has no deployment workflow. Deployment verification needs a real running environment, evidence of a successful support request, and a documented rollback. Add deployment screenshots from that environment when the team prepares its final portfolio.
+Setting `VITE_API_BASE_URL` alone does not authorize cross-origin browser requests; the frontend origin must also be allowed by the backend.
+
+The frontend request timeout is 35 seconds. The external AI-provider timeout is configured separately by the backend/provider implementation.
+
+This repository does not currently include a production deployment workflow or hosted production environment. The final project therefore documents CI execution and local application behavior rather than claiming a successful production deployment.
+
+A production deployment would require additional work including:
+
+- Hosted frontend and backend environments
+- Production PostgreSQL configuration
+- Secure secrets management
+- Deployment verification
+- Monitoring and observability
+- Production authentication and authorization
+- Rate limiting
+- Scalability and reliability testing
+- Documented rollback procedures
 
 ## Development Workflow
 
@@ -583,26 +749,65 @@ Merge approved changes into main
 
 Draft pull requests may be used while a feature or integration effort is still under active development.
 
+The project repository includes evidence of pull-request review, requested changes, follow-up commits, approvals, and merges.
+
+## Team Members and Contributions
+
+- **Makida Abebe (`makida-abebe`)** — Led major backend and integration work across the project. Contributions included AI orchestration and external provider integration, AI API integration, chat message handling, backend persistence, health checks, persistent feedback integration, request-ID/idempotency and retry handling, production CORS configuration, benchmarking updates, final API/user guide/architecture documentation, and overall final-release documentation.
+
+- **Julian Chavez (`Juls2Worlds`)** — Contributed to the backend database foundation and PostgreSQL integration testing, helping establish the persistent data layer and validate database behavior.
+
+- **Tyresz Brash (`TyreszB`)** — Developed major customer-facing frontend functionality, including the customer homepage, prototype support pages, and authentication modals. Also contributed to final project evidence updates.
+
+- **Sebastianna Chan (`sebastiannak`)** — Improved frontend chat recovery, feedback behavior, and quality gates, including reliability and user-state handling improvements.
+
+- **Kierra Cunningham (`KierraC4`)** — Improved frontend API reliability and CI coverage and added the security, risks, controls, and future roadmap documentation.
+
+- **Sean Chase (`seanvchase`)** — Added the frontend CI workflow, helping establish automated frontend validation for testing, coverage, build, and quality checks.
+
 ## Security Notes
 
-- Prototype Authentication: The Alpha release uses a prototype customer sign-in mechanism that stores the customer ID in browser `localStorage`. This is intended for demonstration purposes only and is not a production authentication implementation.
+- **Prototype Authentication:** The current demonstration uses a prototype customer sign-in mechanism that stores the customer ID in browser `localStorage`. This is intended for demonstration purposes only and is not a production authentication implementation.
 - API keys and database credentials should not be committed to source control.
 - Sensitive configuration should be supplied through environment variables.
 - Backend requests are validated before processing.
-- Conversation access is checked against the requesting customer.
-- The frontend communicates with the backend through the defined API rather than accessing the database or external AI provider directly.
+- Conversation access is checked against the requesting customer ID.
+- The frontend communicates with the backend through the defined REST API rather than accessing the database or external AI provider directly.
+- CORS origins are explicitly configurable.
+- Request IDs help reduce duplicate message processing during retries.
+- Duplicate final feedback and duplicate active escalation records are rejected.
+- Production use would require stronger authentication, authorization, rate limiting, monitoring, secrets management, and security hardening.
+
+Additional security risks, controls, and future improvements are documented in:
+
+[docs/SECURITY_RISKS_AND_ROADMAP.md](docs/SECURITY_RISKS_AND_ROADMAP.md)
 
 ## Project Status
 
-The live demo uses `cust_001` / `conv_001`. New profiles, the visible conversation
-list, browser history, and feedback are local demo features, not backend account
-or history APIs. Sample conversations cannot send messages. An `escalated` API
-result recommends human review but does not confirm a ticket or connect an agent.
-The frontend does not invent a live ticket ID or queue assignment. The backend's
-confidence field is a demo score, not a calibrated probability of correctness.
+The final course-project release uses `cust_001` / `conv_001` for the primary live demonstration.
 
-This repository represents the **Alpha release** of the Customer Service Platform.
+Some sample conversations and browser-oriented demonstration behavior remain prototype features. The primary live conversation, however, communicates with the FastAPI backend and supports persistent message processing, escalation handling, and resolution feedback.
 
-The Alpha demonstrates end-to-end integration between the React customer interface, FastAPI backend, external AI provider, and PostgreSQL database. Customer messages can be submitted through the frontend, processed through the backend and AI provider, returned to the user, and persisted in the database.
+The final backend provides:
 
-Additional functionality and refinement may be added during later development stages.
+- Persistent customer and AI messaging
+- Request ID duplicate protection
+- Persistent escalation handling
+- Persistent resolution feedback
+- PostgreSQL integration
+- Health monitoring
+- External AI-provider integration
+
+When a conversation requires human review, the backend can persist an escalation record and the frontend displays the appropriate human-review state. The application does not currently connect the customer directly to a live human representative.
+
+Resolution feedback for the live support conversation is submitted through the backend and stored persistently.
+
+The frontend communicates with the backend through the defined REST API and does not access the database or external AI provider directly.
+
+The backend confidence value remains a demonstration score and should not be interpreted as a calibrated probability of answer correctness.
+
+This repository represents the **final course-project release** of the Customer Service Platform.
+
+It demonstrates integrated communication between the React customer interface, FastAPI backend, external AI provider, and PostgreSQL database, supported by automated testing, CI workflows, code review, coverage measurement, performance benchmarking, and documented project evidence.
+
+The project is a functional software-engineering demonstration rather than a production customer-support service. Production use would require stronger authentication and authorization, production deployment infrastructure, monitoring, rate limiting, security hardening, and additional scalability and reliability validation.
