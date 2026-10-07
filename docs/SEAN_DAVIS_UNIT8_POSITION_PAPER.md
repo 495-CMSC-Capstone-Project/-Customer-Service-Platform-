@@ -1,8 +1,8 @@
-# Professional Position Paper: Delivery, Evaluation, and Growth After an AI-Enabled Customer Service Capstone
+# Professional Position Paper: Delivery, Evaluation, and Growth After an AI Enabled Customer Service Capstone
 
 **Sean Davis**  
 **CMSC 495 — Unit 8: Final Project Portfolio (Individual Artifact)**  
-**Team:** AI-Assisted Customer Service Platform  
+**Team:** AI Assisted Customer Service Platform  
 
 ---
 
@@ -26,21 +26,12 @@ Where the methodology is weaker is equally instructive. Authentication stores a 
 
 ## Section 3: Professional Development Roadmap
 
-Completing this capstone clarified that my next professional growth should be guided by the gaps we could measure, not only by technologies that sound impressive. Industry reports such as the Stack Overflow Developer Survey and GitHub’s State of the Octoverse continue to show strong demand for cloud deployment skills, DevOps automation, and AI-related development practices, while IEEE Computer Society discussions of trustworthy systems reinforce that reliability, security, and lifecycle discipline remain core professional competencies. Against that backdrop, I plan a twelve-to-eighteen-month roadmap with three concrete tracks.
+Completing this capstone clarified that my next professional growth should be guided by the gaps we could measure, not only by technologies that sound impressive. Industry reports such as the Stack Overflow Developer Survey and GitHub’s State of the Octoverse continue to show strong demand for cloud deployment skills, DevOps automation, and AI related development practices, while IEEE Computer Society discussions of trustworthy systems reinforce that reliability, security, and lifecycle discipline remain core professional competencies. Against that backdrop, I plan a twelve to eighteen month roadmap with three concrete tracks.
 
-First, I will deepen production identity and access management. Our prototype sign-in was sufficient for demonstration, but real customer-service platforms require authenticated users, role separation between customers and agents, and protected APIs. I intend to build small proof-of-concept services using modern OAuth 2.0 / OpenID Connect patterns and server-side session or token validation, then map those lessons back to systems like ours where agent queues must not remain anonymously callable.
+First, I will deepen production identity and access management. Our prototype sign in was sufficient for demonstration, but real customer service platforms require authenticated users, role separation between customers and agents, and protected APIs. I intend to build small proof of concept services using modern OAuth 2.0 / OpenID Connect patterns and server side session or token validation, then map those lessons back to systems like ours where agent queues must not remain anonymously callable.
 
-Second, I will strengthen cloud continuous delivery and observability. Local Docker Compose is a useful step beyond “runs on my laptop,” yet employers expect hosted environments, secret management, rollback discipline, and visible health signals. My plan is to deploy a compact full-stack sample to a managed cloud target, wire a basic pipeline from pull request to deploy, and add structured logging plus health/uptime checks. That path directly extends the CI strengths already present in our capstone while closing the delivery gap we documented.
+Second, I will strengthen cloud continuous delivery and observability. Local Docker Compose is a useful step beyond “runs on my laptop,” yet employers expect hosted environments, secret management, rollback discipline, and visible health signals. My plan is to deploy a compact full stack sample to a managed cloud target, wire a basic pipeline from pull request to deploy, and add structured logging plus health/uptime checks. That path directly extends the CI strengths already present in our capstone while closing the delivery gap we documented.
 
-Third, I will study AI evaluation and safety practices for support assistants. Integrating an external model is only the first milestone; professional systems need clearer handling of low-confidence answers, prompt abuse, and escalation quality. I will practice offline evaluation sets for support-style questions, experiment with guardrail patterns, and learn enough observability around model failures to make escalation decisions more evidence-based than keyword heuristics alone.
+Third, I will study AI evaluation and safety practices for support assistants. Integrating an external model is only the first milestone; professional systems need clearer handling of low confidence answers, prompt abuse, and escalation quality. I will practice offline evaluation sets for support style questions, experiment with guardrail patterns, and learn enough observability around model failures to make escalation decisions more evidence based than keyword heuristics alone.
 
-To keep this roadmap executable, I will use quarterly checkpoints: one identity POC, one cloud deploy-with-pipeline POC, and one AI-evaluation notebook or service spike, each with tests and a short written retrospective. I will also continue reading primary sources—annual developer surveys, Octoverse summaries, and IEEE/SEI materials—so technology choices stay evidence-based rather than trend-chasing. The lasting lesson from CMSC 495 is not that our platform is finished, but that professional software engineering is the discipline of delivering an integrated system, measuring it honestly, and then improving the next weakest link with clear ownership. That is the adaptability I intend to carry into practice.
-
----
-
-### Submission note (not part of word count)
-
-**Team repository:** https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-  
-**Individual fork:** https://github.com/Seanbyte08/-Customer-Service-Platform-  
-**Feature branch:** `feature/sean-davis-agent-review-deploy`  
-**Attributed commits:** `9882519`, `5e09ce7`, `5a2a0be` (submission packaging)
+To keep this roadmap executable, I will use quarterly checkpoints: one identity POC, one cloud deploy with pipeline POC, and one AI evaluation notebook or service spike, each with tests and a short written retrospective. I will also continue reading primary sources—annual developer surveys, Octoverse summaries, and IEEE/SEI materials—so technology choices stay evidence based rather than trend chasing. The lasting lesson from CMSC 495 is not that our platform is finished, but that professional software engineering is the discipline of delivering an integrated system, measuring it honestly, and then improving the next weakest link with clear ownership. That is the adaptability I intend to carry into practice.
