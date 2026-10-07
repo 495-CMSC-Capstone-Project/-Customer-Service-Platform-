@@ -709,19 +709,29 @@ Setting `VITE_API_BASE_URL` alone does not authorize cross-origin browser reques
 
 The frontend request timeout is 35 seconds. The external AI-provider timeout is configured separately by the backend/provider implementation.
 
-This repository does not currently include a production deployment workflow or hosted production environment. The final project therefore documents CI execution and local application behavior rather than claiming a successful production deployment.
+The final course-project release is hosted on Render with a React static frontend, FastAPI backend, and PostgreSQL database. Deployment validation confirmed that the public API, application database, and external AI provider were available, and the deployed application successfully completed the AI response, escalation, and persistent feedback flows.
 
-A production deployment would require additional work including:
+Frontend:
+https://customer-service-frontend-we6r.onrender.com
 
-- Hosted frontend and backend environments
-- Production PostgreSQL configuration
-- Secure secrets management
-- Deployment verification
-- Monitoring and observability
+Backend:
+https://customer-service-platform-upus.onrender.com
+
+Deployment screenshots and validation evidence are available in:
+
+[docs/evidence/](docs/evidence/)
+
+This hosted deployment demonstrates the completed course-project release but is not intended to represent a fully hardened enterprise production environment.
+
+Additional production hardening would include:
+
 - Production authentication and authorization
 - Rate limiting
-- Scalability and reliability testing
-- Documented rollback procedures
+- Centralized monitoring and observability
+- Larger-scale concurrency and reliability testing
+- Automated deployment and rollback procedures
+- Additional security hardening
+- Higher-availability infrastructure
 
 ## Development Workflow
 
