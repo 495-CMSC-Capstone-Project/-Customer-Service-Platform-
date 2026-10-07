@@ -19,5 +19,23 @@ The text files next to the images are the raw local results: `backend-pytest.txt
 | `escalation-flow.png` | The same conversation after “I want to speak to a human representative.” The backend returned the escalation reply, and the page shows Human review recommended. |
 | `feedback-flow.png` | Resolution feedback for `conv_001` after submit: recorded successfully, feedback id `fb_138646cfa15c408286009cfbdecf5dd7`, successful, category Account Access, status Escalated. The row is stored in PostgreSQL. |
 
+## Deployment Evidence
 
+The final course-project release was deployed on Render using a React static frontend, FastAPI web service, and PostgreSQL database.
+
+- `deployment-backend-live.png` — Render backend successfully deployed and live.
+- `deployment-health-check.png` — Public health endpoint reporting HEALTHY, API AVAILABLE, database AVAILABLE, and AI provider CONFIGURED.
+- `deployment-render-resources.png` — Render resources showing PostgreSQL available and the frontend deployed.
+- `deployment-frontend-live.png` — React frontend successfully deployed.
+- `deployment-ai-response.png` — Public deployed application receiving a live AI response.
+- `deployment-escalation.png` — Public deployed application demonstrating human-review escalation.
+- `deployment-feedback-escalation.png` — Persistent feedback recorded successfully for the deployed application.
+
+Frontend:
+https://customer-service-frontend-we6r.onrender.com
+
+Backend:
+https://customer-service-platform-upus.onrender.com
+
+This is a course-project hosted deployment and is not intended to represent a fully hardened enterprise production environment.
 
