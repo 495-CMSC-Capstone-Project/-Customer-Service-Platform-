@@ -1,13 +1,13 @@
 # Individual Contributions — Sean Davis
 
-## Submission framing
+## Repositories
 
-- **Team repository (base / official team artifact):**  
+- **Team repository (shared baseline):**  
   `https://github.com/495-CMSC-Capstone-Project/-Customer-Service-Platform-`
-- **Individual fork (enhancements by Sean Davis):**  
+- **This fork (Sean Davis enhancements):**  
   `https://github.com/Seanbyte08/-Customer-Service-Platform-`
 
-The team final release is the shared baseline. This fork adds attributable enhancements on top of that baseline for Unit 8 individual contribution evidence.
+The team final release is the shared baseline. This fork adds attributable enhancements on top of that baseline.
 
 ## Enhancements delivered in this fork
 
