@@ -53,14 +53,3 @@ To remove the database volume as well:
 docker compose down -v
 ```
 
-## Deployment Evidence Notes
-
-Recommended evidence screenshots for the portfolio:
-
-1. Successful `docker compose up --build` output
-2. Browser view of the frontend on port `8080`
-3. `/api/v1/health` response showing healthy services
-4. Agent review queue after an escalation
-5. Optional: `docker compose ps` showing running services
-
-Store screenshots under `docs/evidence/` when capturing final portfolio artifacts.
