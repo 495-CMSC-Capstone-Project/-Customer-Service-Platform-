@@ -11,7 +11,7 @@ The team final release is the shared baseline. This fork adds attributable enhan
 
 ## Enhancements delivered in this fork
 
-1. **Human-agent review queue**
+1. **Human agent review queue**
    - Backend: `GET /api/v1/escalations` lists active escalation tickets
    - Backend: `POST /api/v1/escalations/{ticketId}/claim` moves `OPEN` tickets to `IN_PROGRESS`
    - Frontend: `/agent-review` page to refresh the queue, open conversations, and claim tickets
