@@ -5,9 +5,11 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.database import Base
 from backend.app.escalation_service import (
     ActiveEscalationExistsError,
+    claim_escalation,
     create_escalation,
     ensure_ai_escalation,
     get_active_escalation,
+    list_active_escalations,
 )
 from backend.app.models import (
     Conversation,
@@ -127,3 +129,39 @@ def test_ensure_ai_escalation_reuses_existing_active_ticket(db):
     )
 
     assert second.ticket_id == first.ticket_id
+
+
+def test_list_active_escalations_returns_open_tickets(db):
+    conversation = db.get(Conversation, "conv_001")
+
+    ticket = create_escalation(
+        db=db,
+        conversation=conversation,
+        reason=EscalationReason.LOW_CONFIDENCE,
+        summary="Low confidence response needs review.",
+    )
+
+    tickets = list_active_escalations(db)
+
+    assert len(tickets) == 1
+    assert tickets[0].ticket_id == ticket.ticket_id
+
+
+def test_claim_escalation_moves_open_ticket_to_in_progress(db):
+    conversation = db.get(Conversation, "conv_001")
+
+    ticket = create_escalation(
+        db=db,
+        conversation=conversation,
+        reason=EscalationReason.CUSTOMER_REQUEST,
+        summary="Customer requested human assistance.",
+    )
+
+    claimed = claim_escalation(db, ticket.ticket_id)
+
+    assert claimed.status == TicketStatus.IN_PROGRESS
+
+
+def test_claim_escalation_rejects_unknown_ticket(db):
+    with pytest.raises(LookupError):
+        claim_escalation(db, "ticket_missing")

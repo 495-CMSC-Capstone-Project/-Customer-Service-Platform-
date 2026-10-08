@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 import { AuthModalProvider } from "./context/AuthModalContext";
+import { AgentReviewPage } from "./pages/AgentReviewPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ConversationsPage } from "./pages/ConversationsPage";
 import { FeedbackPage } from "./pages/FeedbackPage";
@@ -22,6 +23,7 @@ export default function App() {
             path="/signup"
             element={<Navigate to="/" replace state={{ authModal: "signup" }} />}
           />
+          <Route path="/agent-review" element={<AgentReviewPage />} />
           <Route
             path="/conversations"
             element={

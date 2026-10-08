@@ -85,6 +85,15 @@ export function Navbar() {
               Conversations
             </NavLink>
           ) : null}
+          <NavLink
+            to="/agent-review"
+            className={({ isActive }: { isActive: boolean }) =>
+              isActive ? "navbar__link is-active" : "navbar__link"
+            }
+            onClick={closeMenu}
+          >
+            Agent review
+          </NavLink>
           {sectionLinks.map((item) => (
             <Link
               key={item.to}

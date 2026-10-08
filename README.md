@@ -22,8 +22,11 @@ The final implementation includes:
 - AI response generation through an external AI provider
 - AI confidence information
 - Persistent escalation handling for conversations requiring human review
+- Prototype human-agent review queue (`/agent-review`) for open escalations
+- AI confidence meter display on assistant messages
 - Persistent resolution feedback for live support conversations
 - Backend health-check service
+- Docker Compose local deployment for frontend, backend, and PostgreSQL
 - Conversation search, status filters, sorting, and sample conversation details
 - Draft recovery and retry controls
 - Customer and AI message persistence
@@ -317,6 +320,8 @@ Additional backend endpoints include:
 
 ```text
 POST /api/v1/escalations
+GET  /api/v1/escalations
+POST /api/v1/escalations/{ticketId}/claim
 POST /api/v1/conversations/{conversationId}/feedback
 GET  /api/v1/health
 ```
@@ -674,6 +679,20 @@ The evidence package includes:
 
 The evidence files document successful CI and local application behavior. They do not represent a production deployment.
 
+## Local Container Deployment
+
+A Docker Compose stack is available for reproducible local deployment evidence:
+
+```bash
+docker compose up --build
+```
+
+- Frontend: `http://localhost:8080`
+- Backend/API docs: `http://localhost:8000/docs`
+- Agent review queue: `http://localhost:8080/agent-review`
+
+Full steps and evidence checklist: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
 ## Deployment Requirements
 
 For a separately hosted frontend, this project uses an explicit backend CORS allowlist.
@@ -775,6 +794,8 @@ The project repository includes evidence of pull-request review, requested chang
 
 - **Sean Chase (`seanvchase`)** — Added the frontend CI workflow, helping establish automated frontend validation for testing, coverage, build, and quality checks.
 
+- **Sean Davis** — Built on the team final release with attributable enhancements: prototype agent review queue (list/claim escalations), AI confidence meter UX, Docker Compose local deployment + deployment guide, and related tests/docs. See [docs/CONTRIBUTIONS_SEAN_DAVIS.md](docs/CONTRIBUTIONS_SEAN_DAVIS.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Security Notes
 
 - **Prototype Authentication:** The current demonstration uses a prototype customer sign-in mechanism that stores the customer ID in browser `localStorage`. This is intended for demonstration purposes only and is not a production authentication implementation.
@@ -808,7 +829,7 @@ The final backend provides:
 - Health monitoring
 - External AI-provider integration
 
-When a conversation requires human review, the backend can persist an escalation record and the frontend displays the appropriate human-review state. The application does not currently connect the customer directly to a live human representative.
+When a conversation requires human review, the backend can persist an escalation record and the frontend displays the appropriate human-review state. The prototype agent review queue lists those tickets for claim/review. The application does not currently connect the customer directly to a live human representative.
 
 Resolution feedback for the live support conversation is submitted through the backend and stored persistently.
 

@@ -20,8 +20,10 @@ from backend.app.conversation_service import (
 from backend.app.database import get_db
 from backend.app.escalation_service import (
     ActiveEscalationExistsError,
+    claim_escalation,
     create_escalation,
     ensure_ai_escalation,
+    list_active_escalations,
 )
 from backend.app.feedback_service import (
     DuplicateFeedbackError,
@@ -93,6 +95,23 @@ class EscalationResponse(BaseModel):
     ticketId: str
     status: str
     assignedQueue: str
+
+
+class EscalationQueueItem(BaseModel):
+    ticketId: str
+    conversationId: str
+    customerId: str
+    reason: str
+    summary: str
+    status: str
+    assignedQueue: str
+    createdAt: str
+    updatedAt: str
+
+
+class EscalationQueueResponse(BaseModel):
+    escalations: list[EscalationQueueItem]
+    count: int
 
 
 class FeedbackRequest(BaseModel):
@@ -277,6 +296,73 @@ def create_human_escalation(
     except ActiveEscalationExistsError as exc:
         raise HTTPException(
             status_code=409,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return EscalationResponse(
+        ticketId=ticket.ticket_id,
+        status=ticket.status.value,
+        assignedQueue=ticket.assigned_queue,
+    )
+
+
+@app.get(
+    "/api/v1/escalations",
+    response_model=EscalationQueueResponse,
+)
+def get_escalation_queue(
+    db: Session = Depends(get_db),
+) -> EscalationQueueResponse:
+    """
+    List active escalation tickets for the prototype human-agent review queue.
+
+    This endpoint is intentionally unauthenticated for course demonstration.
+    Production use would require agent authentication and authorization.
+    """
+    tickets = list_active_escalations(db)
+    items: list[EscalationQueueItem] = []
+
+    for ticket in tickets:
+        conversation = get_conversation(db, ticket.conversation_id)
+        customer_id = (
+            conversation.customer_id if conversation is not None else "unknown"
+        )
+        items.append(
+            EscalationQueueItem(
+                ticketId=ticket.ticket_id,
+                conversationId=ticket.conversation_id,
+                customerId=customer_id,
+                reason=ticket.reason.value,
+                summary=ticket.summary,
+                status=ticket.status.value,
+                assignedQueue=ticket.assigned_queue,
+                createdAt=ticket.created_at.isoformat(),
+                updatedAt=ticket.updated_at.isoformat(),
+            )
+        )
+
+    return EscalationQueueResponse(escalations=items, count=len(items))
+
+
+@app.post(
+    "/api/v1/escalations/{ticketId}/claim",
+    response_model=EscalationResponse,
+)
+def claim_escalation_ticket(
+    ticketId: str = Path(min_length=1),
+    db: Session = Depends(get_db),
+) -> EscalationResponse:
+    """Claim an open escalation ticket for human review (OPEN -> IN_PROGRESS)."""
+    try:
+        ticket = claim_escalation(db, ticketId)
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=404,
             detail=str(exc),
         ) from exc
     except ValueError as exc:

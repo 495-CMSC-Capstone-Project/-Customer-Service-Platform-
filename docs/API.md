@@ -268,6 +268,74 @@ The database also enforces one active `OPEN` or `IN_PROGRESS` ticket per convers
 
 ---
 
+# 2b. List Active Escalations (Agent Review Queue)
+
+## Endpoint
+
+```text
+GET /api/v1/escalations
+```
+
+Returns open and in-progress escalation tickets for the prototype human-agent review queue.
+
+This endpoint is intentionally unauthenticated for course demonstration. Production use would require agent authentication and authorization.
+
+## Successful Response
+
+**Status:** `200 OK`
+
+```json
+{
+  "count": 1,
+  "escalations": [
+    {
+      "ticketId": "ticket_123",
+      "conversationId": "conv_001",
+      "customerId": "cust_001",
+      "reason": "CUSTOMER_REQUEST",
+      "summary": "Customer requested assistance from a human support representative.",
+      "status": "OPEN",
+      "assignedQueue": "General Support",
+      "createdAt": "2026-10-06T12:00:00+00:00",
+      "updatedAt": "2026-10-06T12:00:00+00:00"
+    }
+  ]
+}
+```
+
+---
+
+# 2c. Claim Escalation Ticket
+
+## Endpoint
+
+```text
+POST /api/v1/escalations/{ticketId}/claim
+```
+
+Moves an `OPEN` ticket to `IN_PROGRESS` so an agent can mark it as under review.
+
+## Successful Response
+
+**Status:** `200 OK`
+
+```json
+{
+  "ticketId": "ticket_123",
+  "status": "IN_PROGRESS",
+  "assignedQueue": "General Support"
+}
+```
+
+## Error Responses
+
+| Status | Meaning |
+| --- | --- |
+| `400 Bad Request` | Ticket exists but is not claimable (not `OPEN`) |
+| `404 Not Found` | Ticket does not exist |
+
+---
+
 # 3. Submit Conversation Feedback
 
 ## Endpoint
